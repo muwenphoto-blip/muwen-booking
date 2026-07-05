@@ -1,0 +1,608 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AdminShell } from '@/components/admin-shell';
+import type { AdminServiceRow, AdminSettingsData } from '@/lib/admin/settings';
+
+type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'security';
+
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
+
+function serializeServiceOptions(options: AdminServiceRow['options']): string {
+  return options
+    .map((opt) => (opt.labelEn ? `${opt.label}|${opt.labelEn}` : opt.label))
+    .join('\n');
+}
+
+export function AdminSettingsPanel() {
+  const router = useRouter();
+  const [tab, setTab] = useState<ConfigTab>('shop');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
+
+  const [shopName, setShopName] = useState('');
+  const [shopEmail, setShopEmail] = useState('');
+  const [openDays, setOpenDays] = useState<number[]>([]);
+  const [openTime, setOpenTime] = useState('10:00');
+  const [closeTime, setCloseTime] = useState('18:00');
+  const [slotMinutes, setSlotMinutes] = useState(30);
+  const [maxPerSlot, setMaxPerSlot] = useState(1);
+  const [minDaysAhead, setMinDaysAhead] = useState(0);
+  const [maxDaysAhead, setMaxDaysAhead] = useState(60);
+  const [headcountOptions, setHeadcountOptions] = useState('');
+  const [genderOptions, setGenderOptions] = useState('');
+  const [services, setServices] = useState<AdminServiceRow[]>([]);
+
+  const [newServiceName, setNewServiceName] = useState('');
+  const [newServiceNameEn, setNewServiceNameEn] = useState('');
+  const [newServiceOptions, setNewServiceOptions] = useState('');
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editServiceName, setEditServiceName] = useState('');
+  const [editServiceNameEn, setEditServiceNameEn] = useState('');
+  const [editServiceOptions, setEditServiceOptions] = useState('');
+  const [recoveryConfigured, setRecoveryConfigured] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState('');
+  const [recoveryConfirm, setRecoveryConfirm] = useState('');
+
+  const applySettings = useCallback((settings: AdminSettingsData) => {
+    setShopName(settings.shopName);
+    setShopEmail(settings.shopEmail);
+    setOpenDays(settings.openDays);
+    setOpenTime(settings.openTime);
+    setCloseTime(settings.closeTime);
+    setSlotMinutes(settings.slotMinutes);
+    setMaxPerSlot(settings.maxPerSlot);
+    setMinDaysAhead(settings.minDaysAhead);
+    setMaxDaysAhead(settings.maxDaysAhead);
+    setHeadcountOptions(settings.headcountOptions);
+    setGenderOptions(settings.genderOptions);
+    setServices(settings.services);
+  }, []);
+
+  const loadSettings = useCallback(async () => {
+    const res = await fetch('/api/admin/settings');
+    const data = await res.json();
+    if (res.status === 401) {
+      router.replace('/admin');
+      return;
+    }
+    if (res.status === 400 && String(data.error || '').includes('主控')) {
+      router.replace('/admin/dashboard');
+      return;
+    }
+    if (!res.ok) throw new Error(data.error || '無法載入設定');
+    applySettings(data.settings);
+  }, [applySettings, router]);
+
+  useEffect(() => {
+    loadSettings()
+      .catch((err) => setError(err instanceof Error ? err.message : '載入失敗'))
+      .finally(() => setLoading(false));
+    fetch('/api/admin/recovery/setup')
+      .then(async (res) => res.json())
+      .then((data) => setRecoveryConfigured(Boolean(data.configured)))
+      .catch(() => {});
+  }, [loadSettings]);
+
+  function toggleOpenDay(day: number) {
+    setOpenDays((prev) =>
+      prev.includes(day) ? prev.filter((item) => item !== day) : [...prev, day].sort((a, b) => a - b),
+    );
+  }
+
+  async function saveSection(section: ConfigTab, payload: Record<string, unknown>) {
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section, ...payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '儲存失敗');
+      setMessage(data.message || '已儲存');
+      await loadSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '儲存失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function saveRecoveryKey(event: React.FormEvent) {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await fetch('/api/admin/recovery/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recoveryKey, confirmKey: recoveryConfirm }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '設定失敗');
+      setMessage(data.message || '已設定復原金鑰');
+      setRecoveryConfigured(true);
+      setRecoveryKey('');
+      setRecoveryConfirm('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '設定失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function addService() {
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await fetch('/api/admin/settings/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newServiceName,
+          nameEn: newServiceNameEn,
+          optionsText: newServiceOptions,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '新增失敗');
+      setMessage(data.message || '已新增');
+      setNewServiceName('');
+      setNewServiceNameEn('');
+      setNewServiceOptions('');
+      await loadSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '新增失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function toggleService(id: string, active: boolean) {
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/settings/services/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'toggle', active }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '操作失敗');
+      setMessage(data.message || '已更新');
+      await loadSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '操作失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function saveServiceEdit(id: string) {
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/settings/services/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editServiceName,
+          nameEn: editServiceNameEn,
+          optionsText: editServiceOptions,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '更新失敗');
+      setMessage(data.message || '已更新');
+      setEditingServiceId(null);
+      await loadSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '更新失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function removeService(id: string, name: string) {
+    if (!window.confirm(`確定刪除服務「${name}」？`)) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/settings/services/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '刪除失敗');
+      setMessage(data.message || '已刪除');
+      await loadSettings();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '刪除失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <AdminShell>
+        <div className="admin-card">載入中…</div>
+      </AdminShell>
+    );
+  }
+
+  return (
+    <AdminShell onRefresh={() => loadSettings().catch((err) => setError(err.message))}>
+      {error ? <p className="admin-error">{error}</p> : null}
+      {message ? <p className="admin-success">{message}</p> : null}
+
+      <div className="admin-card">
+        <div className="admin-section-head">
+          <div>
+            <h2>系統設定</h2>
+            <p className="admin-muted">僅主控可修改。變更後客人重新整理預約頁即可看到。</p>
+          </div>
+        </div>
+
+        <nav className="admin-config-nav">
+          {(
+            [
+              ['shop', '店家資訊'],
+              ['booking', '預約規則'],
+              ['form', '表單選項'],
+              ['services', '服務項目'],
+              ['security', '安全復原'],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={['admin-config-tab', tab === key ? 'active' : ''].join(' ')}
+              onClick={() => setTab(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {tab === 'shop' ? (
+          <form
+            className="admin-form admin-form-box"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveSection('shop', { shopName, shopEmail });
+            }}
+          >
+            <p className="admin-muted">店名顯示在預約頁；通知信箱為系統寄信收件。</p>
+            <label className="admin-field">
+              <span>店名</span>
+              <input value={shopName} onChange={(e) => setShopName(e.target.value)} required />
+            </label>
+            <label className="admin-field">
+              <span>通知信箱</span>
+              <input
+                type="email"
+                value={shopEmail}
+                onChange={(e) => setShopEmail(e.target.value)}
+                required
+              />
+            </label>
+            <button type="submit" className="admin-button" disabled={submitting}>
+              儲存
+            </button>
+          </form>
+        ) : null}
+
+        {tab === 'booking' ? (
+          <form
+            className="admin-form admin-form-box"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveSection('booking', {
+                openDays,
+                openTime,
+                closeTime,
+                slotMinutes,
+                maxPerSlot,
+                minDaysAhead,
+                maxDaysAhead,
+              });
+            }}
+          >
+            <p className="admin-muted">營業日、時間、時段間隔與可預約天數。</p>
+            <div className="admin-field">
+              <span>營業日（未選＝店休）</span>
+              <div className="admin-day-picks">
+                {WEEKDAY_LABELS.map((label, day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    className={['admin-day-pick', openDays.includes(day) ? 'on' : ''].join(' ')}
+                    onClick={() => toggleOpenDay(day)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="admin-grid-2">
+              <label className="admin-field">
+                <span>開始時間</span>
+                <input type="time" value={openTime} onChange={(e) => setOpenTime(e.target.value)} required />
+              </label>
+              <label className="admin-field">
+                <span>結束時間</span>
+                <input type="time" value={closeTime} onChange={(e) => setCloseTime(e.target.value)} required />
+              </label>
+              <label className="admin-field">
+                <span>每格（分鐘）</span>
+                <input
+                  type="number"
+                  min={5}
+                  max={240}
+                  step={5}
+                  value={slotMinutes}
+                  onChange={(e) => setSlotMinutes(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>同時段名額</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={maxPerSlot}
+                  onChange={(e) => setMaxPerSlot(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>最早可約（天）</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={365}
+                  value={minDaysAhead}
+                  onChange={(e) => setMinDaysAhead(Number(e.target.value))}
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>最遠可約（天）</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={730}
+                  value={maxDaysAhead}
+                  onChange={(e) => setMaxDaysAhead(Number(e.target.value))}
+                  required
+                />
+              </label>
+            </div>
+            <button type="submit" className="admin-button" disabled={submitting}>
+              儲存
+            </button>
+          </form>
+        ) : null}
+
+        {tab === 'form' ? (
+          <form
+            className="admin-form admin-form-box"
+            onSubmit={(e) => {
+              e.preventDefault();
+              saveSection('form', { headcountOptions, genderOptions });
+            }}
+          >
+            <label className="admin-field">
+              <span>人數選項</span>
+              <input
+                value={headcountOptions}
+                onChange={(e) => setHeadcountOptions(e.target.value)}
+                placeholder="例：1,2,3,4"
+                required
+              />
+            </label>
+            <label className="admin-field">
+              <span>性別選項</span>
+              <textarea
+                value={genderOptions}
+                onChange={(e) => setGenderOptions(e.target.value)}
+                placeholder="一行一個，例：男|Male"
+                required
+              />
+            </label>
+            <button type="submit" className="admin-button" disabled={submitting}>
+              儲存
+            </button>
+          </form>
+        ) : null}
+
+        {tab === 'services' ? (
+          <div className="admin-form-box">
+            <p className="admin-muted">管理客人可選的服務項目。</p>
+            <div className="admin-service-list">
+              {services.map((service) => (
+                <article
+                  key={service.id}
+                  className={['admin-service-item', service.active ? '' : 'inactive'].join(' ')}
+                >
+                  {editingServiceId === service.id ? (
+                    <div className="admin-form">
+                      <label className="admin-field">
+                        <span>服務名稱</span>
+                        <input
+                          value={editServiceName}
+                          onChange={(e) => setEditServiceName(e.target.value)}
+                          required
+                        />
+                      </label>
+                      <label className="admin-field">
+                        <span>英文名稱</span>
+                        <input
+                          value={editServiceNameEn}
+                          onChange={(e) => setEditServiceNameEn(e.target.value)}
+                        />
+                      </label>
+                      <label className="admin-field">
+                        <span>方案選項（一行一個）</span>
+                        <textarea
+                          value={editServiceOptions}
+                          onChange={(e) => setEditServiceOptions(e.target.value)}
+                        />
+                      </label>
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-button"
+                          disabled={submitting}
+                          onClick={() => saveServiceEdit(service.id)}
+                        >
+                          儲存
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-button secondary"
+                          onClick={() => setEditingServiceId(null)}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="admin-service-item-head">
+                        <strong>
+                          {service.name}
+                          {service.name_en ? ` ${service.name_en}` : ''}
+                        </strong>
+                        <span className={service.active ? 'admin-badge active' : 'admin-badge inactive'}>
+                          {service.active ? '上架中' : '已下架'}
+                        </span>
+                      </div>
+                      {service.options.length ? (
+                        <p className="admin-muted admin-service-options">
+                          方案：{service.options.map((opt) => opt.label).join('、')}
+                        </p>
+                      ) : (
+                        <p className="admin-muted">無子方案</p>
+                      )}
+                      <div className="admin-actions">
+                        <button
+                          type="button"
+                          className="admin-action neutral"
+                          disabled={submitting}
+                          onClick={() => {
+                            setEditingServiceId(service.id);
+                            setEditServiceName(service.name);
+                            setEditServiceNameEn(service.name_en);
+                            setEditServiceOptions(serializeServiceOptions(service.options));
+                          }}
+                        >
+                          編輯
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-action neutral"
+                          disabled={submitting}
+                          onClick={() => toggleService(service.id, !service.active)}
+                        >
+                          {service.active ? '下架' : '上架'}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-action reject"
+                          disabled={submitting}
+                          onClick={() => removeService(service.id, service.name)}
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ))}
+            </div>
+
+            <form
+              className="admin-form admin-edit-box"
+              onSubmit={(e) => {
+                e.preventDefault();
+                addService();
+              }}
+            >
+              <h3>新增服務</h3>
+              <div className="admin-grid-2">
+                <label className="admin-field">
+                  <span>服務名稱</span>
+                  <input
+                    value={newServiceName}
+                    onChange={(e) => setNewServiceName(e.target.value)}
+                    placeholder="如：證件照"
+                    required
+                  />
+                </label>
+                <label className="admin-field">
+                  <span>英文名稱（選填）</span>
+                  <input
+                    value={newServiceNameEn}
+                    onChange={(e) => setNewServiceNameEn(e.target.value)}
+                    placeholder="ID Photo"
+                  />
+                </label>
+              </div>
+              <label className="admin-field">
+                <span>方案選項（選填，一行一個）</span>
+                <textarea
+                  value={newServiceOptions}
+                  onChange={(e) => setNewServiceOptions(e.target.value)}
+                  placeholder="例：半身|Half Body"
+                />
+              </label>
+              <button type="submit" className="admin-button" disabled={submitting}>
+                新增服務
+              </button>
+            </form>
+          </div>
+        ) : null}
+
+        {tab === 'security' ? (
+          <form className="admin-form admin-form-box" onSubmit={saveRecoveryKey}>
+            <h3>主控復原金鑰</h3>
+            <p className="admin-muted">
+              離線妥善保存此金鑰。主控忘記密碼時，可在登入頁使用「復原金鑰」重設。
+              {recoveryConfigured ? '（已設定）' : '（尚未設定）'}
+            </p>
+            <label className="admin-field">
+              <span>復原金鑰</span>
+              <input
+                type="password"
+                value={recoveryKey}
+                onChange={(e) => setRecoveryKey(e.target.value)}
+                placeholder="至少 16 字"
+                required
+              />
+            </label>
+            <label className="admin-field">
+              <span>確認復原金鑰</span>
+              <input
+                type="password"
+                value={recoveryConfirm}
+                onChange={(e) => setRecoveryConfirm(e.target.value)}
+                required
+              />
+            </label>
+            <button type="submit" className="admin-button" disabled={submitting}>
+              儲存復原金鑰
+            </button>
+          </form>
+        ) : null}
+      </div>
+    </AdminShell>
+  );
+}
