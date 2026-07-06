@@ -2908,6 +2908,26 @@ body {
   cursor: pointer;
 }
 
+.delivery-drop-zone {
+  border-radius: 12px;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.delivery-drop-zone.drag-over {
+  background: rgba(29, 78, 216, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(29, 78, 216, 0.35);
+}
+
+.delivery-upload-hint {
+  margin: 0 0 12px;
+}
+
+.delivery-upload-progress {
+  margin: 0 0 12px;
+  color: var(--booking-primary);
+  font-weight: 600;
+}
+
 .delivery-admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -2926,6 +2946,58 @@ body {
   width: 100%;
   aspect-ratio: 3 / 2;
   object-fit: cover;
+}
+
+.delivery-preview-frame {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+}
+
+.delivery-preview-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.delivery-preview-frame.protected {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.delivery-preview-watermark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    -32deg,
+    rgba(255, 255, 255, 0) 0,
+    rgba(255, 255, 255, 0) 52px,
+    rgba(255, 255, 255, 0.14) 52px,
+    rgba(255, 255, 255, 0.14) 54px
+  );
+}
+
+.delivery-preview-watermark::after {
+  content: '沐紋映像';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-30deg);
+  font-size: clamp(1rem, 4vw, 1.6rem);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.42);
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.delivery-photo-card .delivery-preview-frame,
+.delivery-download-card .delivery-preview-frame {
+  aspect-ratio: 1;
 }
 
 .delivery-photo-placeholder {

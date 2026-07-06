@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react';
 
-export function DeliveryImage({ src, alt }: { src: string | null | undefined; alt: string }) {
+type Props = {
+  src: string | null | undefined;
+  alt: string;
+  /** Guest preview: discourage saving via right-click / drag. */
+  protect?: boolean;
+};
+
+export function DeliveryImage({ src, alt, protect = false }: Props) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
@@ -17,7 +24,19 @@ export function DeliveryImage({ src, alt }: { src: string | null | undefined; al
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt={alt} decoding="async" onError={() => setFailed(true)} />
+    <div
+      className={`delivery-preview-frame${protect ? ' protected' : ''}`}
+      onContextMenu={protect ? (e) => e.preventDefault() : undefined}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        decoding="async"
+        draggable={false}
+        onError={() => setFailed(true)}
+      />
+      {protect ? <div className="delivery-preview-watermark" aria-hidden /> : null}
+    </div>
   );
 }

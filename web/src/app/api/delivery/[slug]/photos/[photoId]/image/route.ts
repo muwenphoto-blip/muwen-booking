@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveDeliveryPhase } from '@/lib/delivery/access';
 import { authorizeGuestPhotoAccess } from '@/lib/delivery/authorize-photo-access';
-import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
+import { loadDeliveryPhotoFile, loadPreviewPhotoForDisplay } from '@/lib/delivery/load-photo-file';
 import { loadDeliveryBySlug } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -52,15 +52,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
       throw new Error('找不到照片');
     }
 
-    const file = await loadDeliveryPhotoFile(photo.storage_path);
-    return new NextResponse(new Uint8Array(file.body), {
-      headers: {
-        'Content-Type': file.contentType,
-        'Cache-Control': 'private, no-store, no-cache, must-revalidate',
-        'CDN-Cache-Control': 'no-store',
-        'Vercel-CDN-Cache-Control': 'no-store',
-      },
-    });
+    const file =
+      photo.kind === 'preview'
+        ? await loadPreviewPhotoForDisplay(photo.storage_path)
+        : await loadDeliveryPhotoFile(photo.storage_path);
+    const headers: Record<string, string> = {
+      'Content-Type': file.contentType,
+      'Cache-Control': 'private, no-store, no-cache, must-revalidate',
+      'CDN-Cache-Control': 'no-store',
+      'Vercel-CDN-Cache-Control': 'no-store',
+    };
+    if (photo.kind === 'preview') {
+      headers['Content-Disposition'] = 'inline';
+      headers['X-Content-Type-Options'] = 'nosniff';
+    }
+    return new NextResponse(new Uint8Array(file.body), { headers });
   } catch (err) {
     const message = err instanceof Error ? err.message : '無法載入照片';
     const status = message === '請先登入' ? 401 : 400;

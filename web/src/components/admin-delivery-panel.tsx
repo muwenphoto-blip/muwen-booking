@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
 import { DeliveryImage } from '@/components/delivery-image';
@@ -38,6 +38,15 @@ type PhotoRow = {
   preview_src?: string;
 };
 
+type UploadProgress = {
+  kind: 'preview' | 'final';
+  done: number;
+  total: number;
+  failed: number;
+};
+
+const UPLOAD_CONCURRENCY = 3;
+
 function phaseLabel(delivery: DeliveryInfo | null): string {
   if (!delivery) return '尚未建立';
   if (delivery.phase === 'delivering') return '可下載';
@@ -59,6 +68,8 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
   const [deliveryUrl, setDeliveryUrl] = useState<string | null>(null);
   const [canCreate, setCanCreate] = useState(false);
   const [canManage, setCanManage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [dragKind, setDragKind] = useState<'preview' | 'final' | null>(null);
 
   const previewPhotos = useMemo(() => photos.filter((p) => p.kind === 'preview'), [photos]);
   const finalPhotos = useMemo(() => photos.filter((p) => p.kind === 'final'), [photos]);
@@ -109,28 +120,74 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
     }
   }
 
-  async function uploadPhotos(kind: 'preview' | 'final', fileList: FileList | null) {
-    if (!fileList?.length) return;
+  async function uploadPhotos(kind: 'preview' | 'final', input: FileList | File[] | null) {
+    if (!input?.length) return;
+    const files = Array.from(input);
     setError('');
     setMessage('');
+    setUploadProgress({ kind, done: 0, total: files.length, failed: 0 });
     setBusy(true);
-    try {
+
+    let done = 0;
+    let failed = 0;
+    let failedNames: string[] = [];
+    let index = 0;
+
+    const uploadOne = async (file: File) => {
       const form = new FormData();
       form.set('kind', kind);
-      Array.from(fileList).forEach((file) => form.append('files', file));
+      form.append('files', file);
       const res = await fetch(`/api/admin/deliveries/${bookingId}/photos`, {
         method: 'POST',
         body: form,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '上傳失敗');
-      setMessage(data.message || '已上傳');
+    };
+
+    const worker = async () => {
+      while (true) {
+        const current = index;
+        index += 1;
+        if (current >= files.length) break;
+        const file = files[current];
+        try {
+          await uploadOne(file);
+          done += 1;
+        } catch (err) {
+          failed += 1;
+          const reason = err instanceof Error ? err.message : '上傳失敗';
+          failedNames = [...failedNames, `${file.name}：${reason}`];
+        }
+        setUploadProgress({ kind, done: done + failed, total: files.length, failed });
+      }
+    };
+
+    try {
+      await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, () => worker()));
+      if (failed === 0) {
+        setMessage(`已上傳 ${done} 個${kind === 'preview' ? '預覽' : '成品'}檔案`);
+      } else if (done > 0) {
+        setError(`上傳完成：${done} 成功、${failed} 失敗。${failedNames.slice(0, 3).join('；')}`);
+      } else {
+        throw new Error(failedNames[0] || '上傳失敗');
+      }
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : '上傳失敗');
     } finally {
+      setUploadProgress(null);
       setBusy(false);
     }
+  }
+
+  function handleDrop(kind: 'preview' | 'final', event: DragEvent) {
+    event.preventDefault();
+    setDragKind(null);
+    if (!canManage || busy) return;
+    const files = event.dataTransfer.files;
+    if (!files.length) return;
+    void uploadPhotos(kind, files);
   }
 
   async function deletePhoto(photoId: string, fileName: string) {
@@ -331,13 +388,21 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
               </div>
             ) : null}
 
-            <section className="delivery-admin-section">
+            <section
+              className={`delivery-admin-section delivery-drop-zone${dragKind === 'preview' ? ' drag-over' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (canManage && !busy) setDragKind('preview');
+              }}
+              onDragLeave={() => setDragKind((k) => (k === 'preview' ? null : k))}
+              onDrop={(e) => handleDrop('preview', e)}
+            >
               <div className="delivery-section-head">
                 <h2>預覽圖（選片用）</h2>
                 {canManage ? (
                   <div className="delivery-section-actions">
                     <label className="admin-button primary delivery-upload-btn">
-                      上傳預覽
+                      選擇多張預覽
                       <input
                         type="file"
                         accept="image/*"
@@ -363,6 +428,16 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                   </div>
                 ) : null}
               </div>
+              {uploadProgress?.kind === 'preview' ? (
+                <p className="delivery-upload-progress" role="status">
+                  上傳中 {uploadProgress.done}/{uploadProgress.total}
+                  {uploadProgress.failed ? `（${uploadProgress.failed} 失敗）` : ''}
+                </p>
+              ) : (
+                <p className="admin-muted delivery-upload-hint">
+                  可一次選取多張，或直接拖曳檔案到此區塊。
+                </p>
+              )}
               {previewPhotos.length ? (
                 <div className="delivery-admin-grid">
                   {previewPhotos.map((photo) => (
@@ -390,12 +465,20 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
               )}
             </section>
 
-            <section className="delivery-admin-section">
+            <section
+              className={`delivery-admin-section delivery-drop-zone${dragKind === 'final' ? ' drag-over' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (canManage && !busy) setDragKind('final');
+              }}
+              onDragLeave={() => setDragKind((k) => (k === 'final' ? null : k))}
+              onDrop={(e) => handleDrop('final', e)}
+            >
               <div className="delivery-section-head">
                 <h2>成品（原檔）</h2>
                 {canManage ? (
                   <label className="admin-button primary delivery-upload-btn">
-                    上傳成品
+                    選擇多個成品
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -410,7 +493,16 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                   </label>
                 ) : null}
               </div>
-              <p className="admin-muted">上傳第一張成品後，客人進入下載階段（保留 7 天）。</p>
+              {uploadProgress?.kind === 'final' ? (
+                <p className="delivery-upload-progress" role="status">
+                  上傳中 {uploadProgress.done}/{uploadProgress.total}
+                  {uploadProgress.failed ? `（${uploadProgress.failed} 失敗）` : ''}
+                </p>
+              ) : (
+                <p className="admin-muted delivery-upload-hint">
+                  可一次選取多個檔案，或直接拖曳到此區塊。上傳第一張成品後，客人進入下載階段（保留 7 天）。
+                </p>
+              )}
               {finalPhotos.length ? (
                 <ul className="delivery-final-list">
                   {finalPhotos.map((photo) => (

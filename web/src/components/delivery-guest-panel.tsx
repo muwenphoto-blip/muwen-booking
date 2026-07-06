@@ -272,7 +272,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
                       key={photo.id}
                       className={`delivery-photo-card${rejected ? ' rejected' : ''}`}
                     >
-                      <DeliveryImage src={photo.url} alt={photo.file_name} />
+                      <DeliveryImage src={photo.url} alt={photo.file_name} protect />
                       <button
                         type="button"
                         className="delivery-reject-btn"

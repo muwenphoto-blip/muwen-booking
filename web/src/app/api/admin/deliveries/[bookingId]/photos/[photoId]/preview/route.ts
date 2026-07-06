@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeAdminPhotoAccess } from '@/lib/delivery/authorize-photo-access';
-import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
+import { loadDeliveryPhotoFile, loadPreviewPhotoForDisplay } from '@/lib/delivery/load-photo-file';
 import { loadDeliveryByBookingId } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -27,14 +27,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
     const supabase = createAdminSupabaseClient();
     const { data: photo, error } = await supabase
       .from('delivery_photos')
-      .select('storage_path')
+      .select('storage_path, kind')
       .eq('id', photoId)
       .eq('delivery_id', delivery.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
     if (!photo) throw new Error('找不到照片');
 
-    const file = await loadDeliveryPhotoFile(photo.storage_path);
+    const file =
+      photo.kind === 'preview'
+        ? await loadPreviewPhotoForDisplay(photo.storage_path)
+        : await loadDeliveryPhotoFile(photo.storage_path);
     return new NextResponse(new Uint8Array(file.body), {
       headers: {
         'Content-Type': file.contentType,

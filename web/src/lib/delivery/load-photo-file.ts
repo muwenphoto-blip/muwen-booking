@@ -1,4 +1,5 @@
 import { DELIVERY_STORAGE_BUCKET } from '@/lib/delivery/constants';
+import { buildPreviewForDisplay } from '@/lib/delivery/image-processing';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 function contentTypeFromPath(storagePath: string): string {
@@ -36,5 +37,18 @@ export async function loadDeliveryPhotoFile(storagePath: string): Promise<{
   return {
     body,
     contentType: normalizeContentType(data.type || '', storagePath),
+  };
+}
+
+export async function loadPreviewPhotoForDisplay(storagePath: string): Promise<{
+  body: ArrayBuffer;
+  contentType: string;
+}> {
+  const file = await loadDeliveryPhotoFile(storagePath);
+  const watermarked = await buildPreviewForDisplay(Buffer.from(file.body));
+  const bytes = new Uint8Array(watermarked);
+  return {
+    body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+    contentType: 'image/jpeg',
   };
 }
