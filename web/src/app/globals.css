@@ -320,6 +320,42 @@ body {
   overflow-x: hidden;
 }
 
+.admin-install-banner {
+  max-width: 480px;
+  margin: 0 auto 12px;
+  width: 100%;
+}
+
+.admin-install-banner__body {
+  padding: 14px 16px;
+  border: 1px solid #bfdbfe;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #eff6ff 0%, #fff 100%);
+  box-shadow: 0 8px 20px rgba(29, 78, 216, 0.08);
+}
+
+.admin-install-banner__body strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.95rem;
+}
+
+.admin-install-banner__body p {
+  margin: 0 0 12px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.admin-install-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-install-banner__actions .admin-button {
+  min-height: 44px;
+}
+
 @media (max-width: 768px) {
   .admin-page {
     padding: 16px 12px max(40px, env(safe-area-inset-bottom));

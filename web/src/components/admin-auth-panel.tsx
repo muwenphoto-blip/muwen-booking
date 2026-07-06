@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AdminInstallBanner } from '@/components/admin-install-banner';
 
 type StaffOption = { name: string };
 
@@ -148,7 +149,9 @@ export function AdminAuthPanel() {
   }
 
   return (
-    <div className="admin-card">
+    <>
+      {mode === 'login' ? <AdminInstallBanner /> : null}
+      <div className="admin-card">
       <h1>
         {mode === 'bootstrap'
           ? '首次設定主控帳號'
@@ -307,5 +310,6 @@ export function AdminAuthPanel() {
         </button>
       ) : null}
     </div>
+    </>
   );
 }
