@@ -69,7 +69,7 @@ export function buildDeliveryPublicPath(slug: string): string {
 
 export function buildDeliveryAbsoluteUrl(slug: string, requestUrl?: string): string {
   const path = buildDeliveryPublicPath(slug);
-  const site = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL;
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (site) {
     const base = site.startsWith('http') ? site : `https://${site}`;
     return `${base.replace(/\/$/, '')}${path}`;

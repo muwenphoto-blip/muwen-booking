@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { DeliveryImage } from '@/components/delivery-image';
 
 type SessionState = {
   loggedIn: boolean;
@@ -271,8 +272,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
                       key={photo.id}
                       className={`delivery-photo-card${rejected ? ' rejected' : ''}`}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={photo.url} alt={photo.file_name} />
+                      <DeliveryImage src={photo.url} alt={photo.file_name} />
                       <button
                         type="button"
                         className="delivery-reject-btn"
@@ -338,8 +338,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
                       {isPdf ? (
                         <div className="delivery-photo-placeholder">PDF</div>
                       ) : (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={photo.url} alt={photo.file_name} />
+                        <DeliveryImage src={photo.url} alt={photo.file_name} />
                       )}
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <a

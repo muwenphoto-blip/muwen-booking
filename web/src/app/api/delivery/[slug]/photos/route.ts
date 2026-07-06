@@ -68,7 +68,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           kind: photo.kind,
           file_name: photo.file_name,
           selection: photo.selection,
-          url: `/api/delivery/${slug}/photos/${photo.id}/image?access=${access}`,
+          url: `/api/delivery/${slug}/photos/${photo.id}/image?access=${encodeURIComponent(access)}`,
         };
       }),
     );

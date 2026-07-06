@@ -15,12 +15,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: '請先登入' }, { status: 401 });
     }
 
+    const access = request.nextUrl.searchParams.get('access');
     const allowed = await authorizeGuestPhotoAccess(request, {
       slug,
       photoId,
       deliveryId: delivery.id,
     });
-    if (!allowed || !delivery.password_changed) {
+    if (!allowed) {
+      return NextResponse.json({ error: '請先登入' }, { status: 401 });
+    }
+    if (!access && !delivery.password_changed) {
       return NextResponse.json({ error: '請先登入' }, { status: 401 });
     }
     if (delivery.phase === 'expired') {

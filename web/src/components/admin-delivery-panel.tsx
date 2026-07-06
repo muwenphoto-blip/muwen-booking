@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
+import { DeliveryImage } from '@/components/delivery-image';
 import { formatDateWithWeekday } from '@/lib/booking/time';
 
 type BookingInfo = {
@@ -361,21 +362,12 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                 <div className="delivery-admin-grid">
                   {previewPhotos.map((photo) => (
                     <article key={photo.id} className="delivery-admin-photo">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                      <DeliveryImage
                         src={
                           photo.preview_url ||
                           `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview`
                         }
                         alt={photo.file_name}
-                        onError={(e) => {
-                          e.currentTarget.replaceWith(
-                            Object.assign(document.createElement('div'), {
-                              className: 'delivery-photo-placeholder',
-                              textContent: '無法載入',
-                            }),
-                          );
-                        }}
                       />
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <p className="delivery-photo-meta">

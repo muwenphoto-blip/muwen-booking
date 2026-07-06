@@ -15,7 +15,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ bookingId: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const session = await getAdminSession();
     if (!session) {
@@ -62,7 +62,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           });
           return {
             ...photo,
-            preview_url: `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview?access=${access}`,
+            preview_url: `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview?access=${encodeURIComponent(access)}`,
           };
         }),
       );
@@ -74,7 +74,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       delivery: delivery ? stripDeliverySecrets(delivery) : null,
       photos,
       finalCount,
-      deliveryUrl: delivery ? buildDeliveryAbsoluteUrl(delivery.url_slug) : null,
+      deliveryUrl: delivery ? buildDeliveryAbsoluteUrl(delivery.url_slug, request.url) : null,
       canCreate: canCreateDelivery(booking.status),
       canManage: isManagerRole(session.role),
     });
