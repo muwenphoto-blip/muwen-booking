@@ -136,6 +136,29 @@ export function BookingDocumentsModal({
     }
   }
 
+  function handleOpenStudio() {
+    if (!state) return;
+    if (dirty && !window.confirm('尚有未儲存的變更，工作室會使用目前畫面內容；建議先按儲存。仍要繼續？')) {
+      return;
+    }
+    setStudioOpen(true);
+  }
+
+  function handlePrint() {
+    if (!printRef.current) return;
+    if (dirty && !window.confirm('尚有未儲存的變更，列印的是目前畫面內容；建議先按儲存。仍要繼續？')) {
+      return;
+    }
+    setBusy('print');
+    printDocument(printRef.current);
+    setBusy(null);
+  }
+
+  const formComplete = useMemo(() => {
+    if (!state || !services.length) return false;
+    return isDocumentFormComplete(state, services);
+  }, [state, services]);
+
   if (!open) return null;
 
   const sharedProps = state
@@ -157,11 +180,6 @@ export function BookingDocumentsModal({
   const printProps = state
     ? { state, shopName, shopFullName, shopAddress, shopPhone }
     : null;
-
-  const formComplete = useMemo(() => {
-    if (!state || !services.length) return false;
-    return isDocumentFormComplete(state, services);
-  }, [state, services]);
 
   const actionButtons = (
     <>
@@ -191,24 +209,6 @@ export function BookingDocumentsModal({
       </button>
     </>
   );
-
-  function handleOpenStudio() {
-    if (!state) return;
-    if (dirty && !window.confirm('尚有未儲存的變更，工作室會使用目前畫面內容；建議先按儲存。仍要繼續？')) {
-      return;
-    }
-    setStudioOpen(true);
-  }
-
-  function handlePrint() {
-    if (!printRef.current) return;
-    if (dirty && !window.confirm('尚有未儲存的變更，列印的是目前畫面內容；建議先按儲存。仍要繼續？')) {
-      return;
-    }
-    setBusy('print');
-    printDocument(printRef.current);
-    setBusy(null);
-  }
 
   return (
     <div className="admin-modal-backdrop booking-doc-backdrop" onClick={requestClose}>
