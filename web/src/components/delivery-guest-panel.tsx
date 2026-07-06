@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { DeliveryImage } from '@/components/delivery-image';
+import { DeliveryPhotoLightbox } from '@/components/delivery-photo-lightbox';
 
 type SessionState = {
   loggedIn: boolean;
@@ -29,6 +30,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [showExpiryModal, setShowExpiryModal] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const [password, setPassword] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -260,19 +262,27 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
         <div className="delivery-card">
           <h2>選片</h2>
           <p className="delivery-muted">
-            預設全部保留。點照片下方 ✗ 可標記不要的照片（會變灰並顯示紅色 ✗）。
+            預設全部保留。點照片可全螢幕放大檢視；點 ✗ 可標記不要的照片（會變灰）。
           </p>
           {photos.length ? (
             <>
               <div className="delivery-grid">
-                {photos.map((photo) => {
+                {photos.map((photo, index) => {
                   const rejected = photo.selection === 'reject';
                   return (
                     <article
                       key={photo.id}
                       className={`delivery-photo-card${rejected ? ' rejected' : ''}`}
                     >
-                      <DeliveryImage src={photo.url} alt={photo.file_name} protect />
+                      <button
+                        type="button"
+                        className="delivery-photo-open"
+                        disabled={busy}
+                        onClick={() => setLightboxIndex(index)}
+                        aria-label={`放大檢視 ${photo.file_name}`}
+                      >
+                        <DeliveryImage src={photo.url} alt={photo.file_name} protect />
+                      </button>
                       <button
                         type="button"
                         className="delivery-reject-btn"
@@ -364,6 +374,17 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
           <h2>連結已失效</h2>
           <p className="delivery-muted">下載期限已過，如需協助請聯繫沐紋映像。</p>
         </div>
+      ) : null}
+
+      {lightboxIndex !== null ? (
+        <DeliveryPhotoLightbox
+          photos={photos}
+          index={lightboxIndex}
+          busy={busy}
+          onClose={() => setLightboxIndex(null)}
+          onNavigate={setLightboxIndex}
+          onToggleReject={togglePhoto}
+        />
       ) : null}
 
       {showExpiryModal && session.daysRemaining != null ? (

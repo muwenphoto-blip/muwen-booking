@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
 import { DeliveryImage } from '@/components/delivery-image';
+import { DeliveryUploadProgress } from '@/components/delivery-upload-progress';
 import { formatDateWithWeekday } from '@/lib/booking/time';
 
 type BookingInfo = {
@@ -254,6 +255,30 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
     }
   }
 
+  async function deleteAllFinals() {
+    if (!finalPhotos.length) return;
+    const ok = window.confirm(
+      `確定刪除全部 ${finalPhotos.length} 個成品？客人將回到選片階段，需重新上傳成品才會開放下載。`,
+    );
+    if (!ok) return;
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/deliveries/${bookingId}/photos/finals`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '刪除失敗');
+      setMessage(data.message || '已刪除全部成品');
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '刪除失敗');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function copyUrl() {
     if (!deliveryUrl) return;
     try {
@@ -429,10 +454,7 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                 ) : null}
               </div>
               {uploadProgress?.kind === 'preview' ? (
-                <p className="delivery-upload-progress" role="status">
-                  上傳中 {uploadProgress.done}/{uploadProgress.total}
-                  {uploadProgress.failed ? `（${uploadProgress.failed} 失敗）` : ''}
-                </p>
+                <DeliveryUploadProgress progress={uploadProgress} />
               ) : (
                 <p className="admin-muted delivery-upload-hint">
                   可一次選取多張，或直接拖曳檔案到此區塊。
@@ -477,27 +499,36 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
               <div className="delivery-section-head">
                 <h2>成品（原檔）</h2>
                 {canManage ? (
-                  <label className="admin-button primary delivery-upload-btn">
-                    選擇多個成品
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                      multiple
-                      hidden
-                      disabled={busy}
-                      onChange={(e) => {
-                        uploadPhotos('final', e.target.files);
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
+                  <div className="delivery-section-actions">
+                    <label className="admin-button primary delivery-upload-btn">
+                      選擇多個成品
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,application/pdf"
+                        multiple
+                        hidden
+                        disabled={busy}
+                        onChange={(e) => {
+                          uploadPhotos('final', e.target.files);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                    {finalPhotos.length ? (
+                      <button
+                        type="button"
+                        className="admin-button reject"
+                        disabled={busy}
+                        onClick={deleteAllFinals}
+                      >
+                        一鍵刪除成品
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
               {uploadProgress?.kind === 'final' ? (
-                <p className="delivery-upload-progress" role="status">
-                  上傳中 {uploadProgress.done}/{uploadProgress.total}
-                  {uploadProgress.failed ? `（${uploadProgress.failed} 失敗）` : ''}
-                </p>
+                <DeliveryUploadProgress progress={uploadProgress} />
               ) : (
                 <p className="admin-muted delivery-upload-hint">
                   可一次選取多個檔案，或直接拖曳到此區塊。上傳第一張成品後，客人進入下載階段（保留 7 天）。
