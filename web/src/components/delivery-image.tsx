@@ -13,12 +13,6 @@ export function DeliveryImage({ src, alt }: { src: string | null | undefined; al
       return undefined;
     }
 
-    if (src.startsWith('data:')) {
-      setFailed(false);
-      setBlobUrl(src);
-      return undefined;
-    }
-
     let objectUrl: string | null = null;
     let cancelled = false;
     setFailed(false);

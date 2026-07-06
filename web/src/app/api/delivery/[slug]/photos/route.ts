@@ -6,7 +6,6 @@ import {
   resolveDeliveryPhase,
 } from '@/lib/delivery/access';
 import { getDeliveryGuestSession, loadDeliveryBySlug, syncDeliveryExpiry } from '@/lib/delivery/store';
-import { loadDeliveryPhotoDataUrl } from '@/lib/delivery/load-photo-file';
 import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -60,13 +59,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       (photos ?? []).map(async (photo) => {
         const isPdf = photo.file_name.toLowerCase().endsWith('.pdf');
         let url: string | null = null;
-        if (photo.kind === 'preview' && !isPdf) {
-          try {
-            url = await loadDeliveryPhotoDataUrl(photo.storage_path);
-          } catch {
-            url = null;
-          }
-        } else if (!isPdf) {
+        if (!isPdf) {
           const access = await signPhotoAccessToken({
             scope: 'guest',
             slug,

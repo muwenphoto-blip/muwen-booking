@@ -35,7 +35,7 @@ type PhotoRow = {
   file_name: string;
   selection: string;
   sort_order: number;
-  preview_url?: string | null;
+  preview_token?: string;
 };
 
 function phaseLabel(delivery: DeliveryInfo | null): string {
@@ -66,17 +66,22 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
 
   const loadData = useCallback(async () => {
     const res = await fetch(`/api/admin/deliveries/${bookingId}`);
-    const data = await res.json();
+    let data: Record<string, unknown>;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error('無法解析交片資料，請重新整理後再試');
+    }
     if (res.status === 401) {
       router.replace('/admin');
       return;
     }
-    if (!res.ok) throw new Error(data.error || '無法載入交片資料');
-    setBooking(data.booking ?? null);
-    setDelivery(data.delivery ?? null);
-    setPhotos(data.photos ?? []);
-    setFinalCount(data.finalCount ?? 0);
-    setDeliveryUrl(data.deliveryUrl ?? null);
+    if (!res.ok) throw new Error(String(data.error || '無法載入交片資料'));
+    setBooking((data.booking as BookingInfo | null) ?? null);
+    setDelivery((data.delivery as DeliveryInfo | null) ?? null);
+    setPhotos((data.photos as PhotoRow[]) ?? []);
+    setFinalCount(Number(data.finalCount ?? 0));
+    setDeliveryUrl((data.deliveryUrl as string | null) ?? null);
     setCanCreate(Boolean(data.canCreate));
     setCanManage(Boolean(data.canManage));
   }, [bookingId, router]);
@@ -362,7 +367,14 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                 <div className="delivery-admin-grid">
                   {previewPhotos.map((photo) => (
                     <article key={photo.id} className="delivery-admin-photo">
-                      <DeliveryImage src={photo.preview_url} alt={photo.file_name} />
+                      <DeliveryImage
+                        src={
+                          photo.preview_token
+                            ? `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview?access=${encodeURIComponent(photo.preview_token)}`
+                            : null
+                        }
+                        alt={photo.file_name}
+                      />
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <p className="delivery-photo-meta">
                         {photo.selection === 'reject' ? '客人標記刪除' : '保留'}

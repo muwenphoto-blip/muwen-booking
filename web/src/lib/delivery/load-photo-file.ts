@@ -9,6 +9,12 @@ function contentTypeFromPath(storagePath: string): string {
   return 'image/jpeg';
 }
 
+function normalizeContentType(type: string, storagePath: string): string {
+  const base = String(type || '').split(';')[0].trim().toLowerCase();
+  if (base.startsWith('image/') || base === 'application/pdf') return base;
+  return contentTypeFromPath(storagePath);
+}
+
 export async function loadDeliveryPhotoFile(storagePath: string): Promise<{
   body: ArrayBuffer;
   contentType: string;
@@ -29,12 +35,6 @@ export async function loadDeliveryPhotoFile(storagePath: string): Promise<{
   const body = await data.arrayBuffer();
   return {
     body,
-    contentType: data.type || contentTypeFromPath(storagePath),
+    contentType: normalizeContentType(data.type || '', storagePath),
   };
-}
-
-export async function loadDeliveryPhotoDataUrl(storagePath: string): Promise<string> {
-  const file = await loadDeliveryPhotoFile(storagePath);
-  const base64 = Buffer.from(file.body).toString('base64');
-  return `data:${file.contentType};base64,${base64}`;
 }
