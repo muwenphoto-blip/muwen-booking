@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import {
@@ -9,18 +9,30 @@ import {
   WATERMARK_TEXT,
 } from '@/lib/delivery/constants';
 
+const WATERMARK_FONTS = [
+  { file: 'noto-sans-tc-106-700-normal.woff2', range: 'U+6c50' },
+  { file: 'noto-sans-tc-112-700-normal.woff2', range: 'U+7d0b, U+6620' },
+  { file: 'noto-sans-tc-117-700-normal.woff2', range: 'U+50cf' },
+] as const;
+
 let watermarkFontCss: string | null = null;
+
+function readFontBase64(fileName: string): string {
+  const candidates = [
+    join(process.cwd(), 'assets/fonts/watermark', fileName),
+    join(process.cwd(), 'node_modules/@fontsource/noto-sans-tc/files', fileName),
+  ];
+  for (const path of candidates) {
+    if (!existsSync(path)) continue;
+    return readFileSync(path).toString('base64');
+  }
+  throw new Error(`找不到浮水印字型：${fileName}`);
+}
 
 function getWatermarkFontCss(): string {
   if (watermarkFontCss) return watermarkFontCss;
-  const fontDir = join(process.cwd(), 'node_modules/@fontsource/noto-sans-tc/files');
-  const subsets = [
-    { file: 'noto-sans-tc-106-700-normal.woff2', range: 'U+6c50' },
-    { file: 'noto-sans-tc-112-700-normal.woff2', range: 'U+7d0b, U+6620' },
-    { file: 'noto-sans-tc-117-700-normal.woff2', range: 'U+50cf' },
-  ];
-  const faces = subsets.map(({ file, range }) => {
-    const base64 = readFileSync(join(fontDir, file)).toString('base64');
+  const faces = WATERMARK_FONTS.map(({ file, range }) => {
+    const base64 = readFontBase64(file);
     return `@font-face{font-family:'MuwenWM';src:url(data:font/woff2;base64,${base64}) format('woff2');font-weight:700;font-style:normal;unicode-range:${range};}`;
   });
   watermarkFontCss = faces.join('');
@@ -85,8 +97,7 @@ export async function buildPreviewImage(input: Buffer): Promise<Buffer> {
   return buildResizedPreview(input);
 }
 
-/** Serve path: resize source if needed, then burn in watermark. */
+/** Serve path: watermark stored preview (already resized on upload). */
 export async function buildPreviewForDisplay(input: Buffer): Promise<Buffer> {
-  const resized = await buildResizedPreview(input);
-  return applyPreviewWatermark(resized);
+  return applyPreviewWatermark(input);
 }

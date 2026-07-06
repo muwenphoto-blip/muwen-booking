@@ -3,11 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ['sharp'],
   outputFileTracingIncludes: {
-    '/api/**': [
-      './node_modules/@fontsource/noto-sans-tc/files/noto-sans-tc-106-700-normal.woff2',
-      './node_modules/@fontsource/noto-sans-tc/files/noto-sans-tc-112-700-normal.woff2',
-      './node_modules/@fontsource/noto-sans-tc/files/noto-sans-tc-117-700-normal.woff2',
-    ],
+    '/api/**': ['./assets/fonts/watermark/**'],
   },
   // 讓手機用區域 IP 連 dev server 時，HMR / 前端資源不會被擋
   allowedDevOrigins: [

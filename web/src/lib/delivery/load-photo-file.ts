@@ -45,8 +45,15 @@ export async function loadPreviewPhotoForDisplay(storagePath: string): Promise<{
   contentType: string;
 }> {
   const file = await loadDeliveryPhotoFile(storagePath);
-  const watermarked = await buildPreviewForDisplay(Buffer.from(file.body));
-  const bytes = new Uint8Array(watermarked);
+  const input = Buffer.from(file.body);
+  let output: Buffer;
+  try {
+    output = await buildPreviewForDisplay(input);
+  } catch {
+    // If watermark fails (e.g. missing fonts), still serve the stored preview.
+    output = input;
+  }
+  const bytes = new Uint8Array(output);
   return {
     body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
     contentType: 'image/jpeg',
