@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerAdminSession } from '@/lib/admin/admin-sessions';
+import { readAdminClientInfo } from '@/lib/admin/client-info';
 import { hashPassword, validatePasswordStrength } from '@/lib/admin/password';
 import {
   formatRoleLabel,
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       account: data.account_name,
       role: data.role as AdminRole,
       photographerName: data.photographer_name || '',
+      client: readAdminClientInfo(request),
     });
 
     const token = await signSession({

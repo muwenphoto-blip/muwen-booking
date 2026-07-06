@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerAdminSession } from '@/lib/admin/admin-sessions';
+import { readAdminClientInfo } from '@/lib/admin/client-info';
 import {
   assertLoginAllowed,
   clearLoginFailures,
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
         account: match.account_name,
         role: match.role as AdminRole,
         photographerName: match.photographer_name || '',
+        client: readAdminClientInfo(request),
       });
     } catch {
       // admin_sessions 表尚未建立時仍允許登入

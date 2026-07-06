@@ -181,7 +181,7 @@ export function AdminSchedulePanel() {
   const [submittedOffDates, setSubmittedOffDates] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 640px)');
+    const media = window.matchMedia('(max-width: 1024px)');
     const sync = () => setIsMobile(media.matches);
     sync();
     media.addEventListener('change', sync);
@@ -349,13 +349,11 @@ export function AdminSchedulePanel() {
 
   function selectDay(date: string) {
     setSelectedDate(date);
+    setDayPageIndex(pageIndexForDate(panel?.monthDays ?? [], date));
     window.requestAnimationFrame(() => {
       document
         .getElementById(`schedule-day-${date}`)
         ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-      if (isMobile) {
-        document.getElementById('schedule-day-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
     });
   }
 
@@ -605,10 +603,7 @@ export function AdminSchedulePanel() {
     );
   }
 
-  const visibleDays =
-    isMobile && selectedDate
-      ? panel.monthDays.filter((day) => day.date === selectedDate)
-      : panel.monthDays;
+  const visibleDays = panel.monthDays;
   const calendarRows = buildCalendarRows(panel.monthDays);
   const today = todayDateKey();
   const canEdit = panel.canEdit !== false;
@@ -791,8 +786,8 @@ export function AdminSchedulePanel() {
               <span className="admin-schedule-picker-label">日期</span>
               <span className="admin-schedule-picker-hint">
                 {isMobile
-                  ? '點月曆日期後，下方編輯該日排班'
-                  : '點日期切換下方編輯區 · 淺藍框為目前這 7 天'}
+                  ? '點月曆日期可快速定位 · 下方排班卡可左右滑動'
+                  : '點日期切換下方編輯區 · 排班卡可左右拖曳瀏覽'}
               </span>
             </div>
             <div className="admin-schedule-picker-hint">
@@ -1017,6 +1012,13 @@ export function AdminSchedulePanel() {
         {!panel.allSlots.length ? (
           <p className="admin-error">請先在系統設定中設定營業時間</p>
         ) : (
+          <>
+          {isMobile ? (
+            <p className="admin-muted admin-schedule-week-scroll-hint">
+              ← 左右滑動瀏覽各日排班 · 點月曆可快速跳轉 →
+            </p>
+          ) : null}
+          <div className="admin-schedule-week-scroll-wrap">
           <div id="schedule-day-editor" className="admin-schedule-week-grid">
             {visibleDays.map((day) => {
               const state = dateStates[day.date] ?? {
@@ -1267,6 +1269,8 @@ export function AdminSchedulePanel() {
               );
             })}
           </div>
+          </div>
+          </>
         )}
       </div>
     </AdminShell>

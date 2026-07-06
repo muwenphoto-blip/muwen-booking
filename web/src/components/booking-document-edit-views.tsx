@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { DateParts } from '@/lib/admin/booking-documents';
 import {
   serviceOptionsFor,
@@ -167,63 +168,93 @@ export function BookingDocumentFeeFooter(props: BookingDocumentSharedProps) {
   const { subtotalQty, subtotalAmount, grandTotal } = summarizeItemRows(state.itemRows);
   const documentTotal = getDocumentGrandTotal(state);
   const balanceDue = getBalanceDue(state);
+  const hasFeeDetails = Boolean(
+    state.additionalAmount.trim() || state.deposit.trim() || state.additionalItems.trim(),
+  );
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (hasFeeDetails) setExpanded(true);
+  }, [hasFeeDetails]);
+
+  const detailFields = (
+    <div className="booking-doc-fee-footer__fields admin-grid-2">
+      <label className="admin-field">
+        <span>追加金額</span>
+        <input
+          value={state.additionalAmount}
+          onChange={(e) =>
+            onChange(patchDocumentState(state, { ...state, additionalAmount: e.target.value }))
+          }
+        />
+      </label>
+      <label className="admin-field">
+        <span>訂金</span>
+        <input
+          value={state.deposit}
+          onChange={(e) => onChange(patchDocumentState(state, { ...state, deposit: e.target.value }))}
+        />
+      </label>
+      <label className="admin-field">
+        <span>尾款</span>
+        <input
+          className="booking-doc-readonly-field"
+          readOnly
+          tabIndex={-1}
+          value={balanceDue ? String(balanceDue) : ''}
+          placeholder="自動計算"
+        />
+      </label>
+      <label className="admin-field admin-field--full">
+        <span>追加商品細項</span>
+        <textarea
+          rows={2}
+          value={state.additionalItems}
+          onChange={(e) => onChange({ ...state, additionalItems: e.target.value })}
+        />
+      </label>
+    </div>
+  );
 
   return (
-    <div className="booking-doc-fee-footer">
-      <div className="booking-doc-fee-footer__head">
-        <h4>費用</h4>
-        <p>金額由服務明細自動計算；尾款 = 應收總額 − 訂金</p>
-      </div>
-      <div className="booking-doc-edit-summary booking-doc-edit-summary--footer">
-        <div>
-          <span>小計數量</span>
-          <strong>{subtotalQty || '—'}</strong>
+    <div
+      className={`booking-doc-fee-footer is-collapsible ${expanded ? 'is-expanded' : 'is-collapsed'}`}
+    >
+      <button
+        type="button"
+        className="booking-doc-fee-footer__toggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((prev) => !prev)}
+      >
+        <div className="booking-doc-fee-footer__toggle-main">
+          <div className="booking-doc-fee-footer__head">
+            <h4>費用</h4>
+            <p>
+              {expanded
+                ? '金額由服務明細自動計算；尾款 = 應收總額 − 訂金'
+                : '點擊展開可編輯訂金、追加金額與細項'}
+            </p>
+          </div>
+          <div className="booking-doc-edit-summary booking-doc-edit-summary--footer">
+            <div>
+              <span>小計數量</span>
+              <strong>{subtotalQty || '—'}</strong>
+            </div>
+            <div>
+              <span>小計金額</span>
+              <strong>{subtotalAmount || '—'}</strong>
+            </div>
+            <div>
+              <span>應收總額</span>
+              <strong>{documentTotal || grandTotal || '—'}</strong>
+            </div>
+          </div>
         </div>
-        <div>
-          <span>小計金額</span>
-          <strong>{subtotalAmount || '—'}</strong>
-        </div>
-        <div>
-          <span>應收總額</span>
-          <strong>{documentTotal || grandTotal || '—'}</strong>
-        </div>
-      </div>
-      <div className="booking-doc-fee-footer__fields admin-grid-2">
-        <label className="admin-field">
-          <span>追加金額</span>
-          <input
-            value={state.additionalAmount}
-            onChange={(e) =>
-              onChange(patchDocumentState(state, { ...state, additionalAmount: e.target.value }))
-            }
-          />
-        </label>
-        <label className="admin-field">
-          <span>訂金</span>
-          <input
-            value={state.deposit}
-            onChange={(e) => onChange(patchDocumentState(state, { ...state, deposit: e.target.value }))}
-          />
-        </label>
-        <label className="admin-field">
-          <span>尾款</span>
-          <input
-            className="booking-doc-readonly-field"
-            readOnly
-            tabIndex={-1}
-            value={balanceDue ? String(balanceDue) : ''}
-            placeholder="自動計算"
-          />
-        </label>
-        <label className="admin-field admin-field--full">
-          <span>追加商品細項</span>
-          <textarea
-            rows={2}
-            value={state.additionalItems}
-            onChange={(e) => onChange({ ...state, additionalItems: e.target.value })}
-          />
-        </label>
-      </div>
+        <span className="booking-doc-fee-footer__chevron" aria-hidden>
+          {expanded ? '收合' : '展開'}
+        </span>
+      </button>
+      {expanded ? detailFields : null}
     </div>
   );
 }

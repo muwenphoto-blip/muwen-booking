@@ -35,12 +35,12 @@ body {
 @media (max-width: 768px) {
   .booking-page {
     padding: 24px 16px 40px;
-    overflow-x: clip;
+    overflow-x: hidden;
   }
 
   .booking-card {
     padding: 18px 16px;
-    overflow-x: clip;
+    overflow-x: hidden;
   }
 
   .booking-field input[type="date"] {
@@ -317,7 +317,7 @@ body {
   background: #eef2f7;
   padding: 24px 16px max(48px, env(safe-area-inset-bottom));
   box-sizing: border-box;
-  overflow-x: clip;
+  overflow-x: hidden;
 }
 
 @media (max-width: 768px) {
@@ -376,6 +376,8 @@ body {
 .admin-shell {
   max-width: 1080px;
   margin: 0 auto;
+  width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -395,6 +397,8 @@ body {
 .admin-shell .admin-card {
   max-width: none;
   margin: 0;
+  min-width: 0;
+  overflow-x: visible;
 }
 
 .admin-card h1,
@@ -648,13 +652,34 @@ body {
   .admin-action {
     flex: 1;
     min-width: 0;
+    min-height: 44px;
     text-align: center;
+    touch-action: manipulation;
   }
 
   .admin-nav a {
     flex: 0 0 auto;
     justify-content: center;
     text-align: center;
+  }
+
+  .admin-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .admin-stat {
+    padding: 12px;
+  }
+
+  .admin-booking-card-actions .admin-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-booking-card-actions .admin-button,
+  .admin-booking-card-actions .admin-action {
+    width: 100%;
   }
 }
 
@@ -1593,16 +1618,41 @@ body {
   margin-top: 4px;
 }
 
+.admin-schedule-week-scroll-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.admin-schedule-week-scroll-hint {
+  margin: 12px 0 4px;
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+@media (min-width: 769px) {
+  .admin-schedule-week-scroll-hint {
+    text-align: left;
+  }
+}
+
 .admin-schedule-week-grid {
   display: flex;
   flex-wrap: nowrap;
+  align-items: stretch;
   gap: 12px;
   margin-top: 12px;
-  overflow-x: auto;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: scroll;
   overflow-y: hidden;
   padding-bottom: 10px;
-  scroll-snap-type: x proximity;
+  scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x pan-y;
 }
 
 .schedule-day-card {
@@ -2007,13 +2057,61 @@ body {
   opacity: 0.95;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 1100px) {
+  .schedule-day-card {
+    flex: 0 0 min(280px, 78vw);
+  }
+}
+
+@media (max-width: 1024px) {
+  .admin-schedule-week-scroll-wrap {
+    margin-inline: -14px;
+  }
+
   .admin-schedule-week-grid {
-    grid-template-columns: repeat(7, minmax(112px, 1fr));
+    margin-top: 8px;
+    padding-inline: 14px;
+    scroll-padding-inline: 14px;
+    gap: 10px;
+    scrollbar-width: none;
+  }
+
+  .admin-schedule-week-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .schedule-day-card {
+    flex: 0 0 clamp(260px, 84vw, 320px);
+    width: clamp(260px, 84vw, 320px);
+    max-width: none;
+    scroll-snap-align: center;
   }
 }
 
 @media (max-width: 768px) {
+  .admin-schedule-week-scroll-wrap {
+    margin-inline: -14px;
+  }
+
+  .admin-schedule-week-grid {
+    margin-inline: 0;
+    padding-inline: 14px;
+    scroll-padding-inline: 14px;
+    scroll-snap-type: x mandatory;
+    gap: 10px;
+    scrollbar-width: none;
+  }
+
+  .admin-schedule-week-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .schedule-day-card {
+    flex: 0 0 clamp(260px, 88vw, 300px);
+    width: clamp(260px, 88vw, 300px);
+    scroll-snap-align: center;
+  }
+
   .admin-schedule-picker-head {
     flex-direction: column;
     align-items: flex-start;
@@ -2021,26 +2119,6 @@ body {
 
   .admin-section-head {
     gap: 8px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .schedule-day-card {
-    flex-basis: min(280px, 78vw);
-  }
-}
-
-@media (max-width: 640px) {
-  .admin-schedule-week-grid {
-    overflow-x: visible;
-    flex-direction: column;
-    gap: 12px;
-    scroll-margin-top: 12px;
-  }
-
-  .schedule-day-card {
-    flex: none;
-    width: 100%;
   }
 
   .admin-schedule-picker {
@@ -2081,20 +2159,6 @@ body {
     min-width: 44px;
     min-height: 44px;
     padding-inline: 14px;
-  }
-
-  .admin-schedule-day-page-nav {
-    display: grid;
-    gap: 8px;
-  }
-
-  .admin-schedule-mobile-day-label {
-    text-align: center;
-    font-weight: 600;
-    padding: 8px 10px;
-    border-radius: 10px;
-    background: #eff6ff;
-    color: #1d4ed8;
   }
 
   .admin-schedule-actions {
@@ -2261,6 +2325,12 @@ body {
     min-height: 36px;
     padding: 8px 14px;
     touch-action: manipulation;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-schedule-week-scroll-hint {
+    font-size: 0.8rem;
   }
 }
 
@@ -2681,13 +2751,34 @@ body {
 
 .admin-session-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  padding: 10px 12px;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
   border: 1px solid var(--booking-border);
   border-radius: 10px;
   background: #fafbfc;
+}
+
+.admin-session-item__body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-session-item__name {
+  font-size: 0.95rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.admin-session-item__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.45;
 }
 
 .admin-session-dot {
@@ -3145,7 +3236,8 @@ body {
 
 .admin-modal--documents {
   width: min(1040px, 100%);
-  max-height: calc(100vh - 24px);
+  height: min(920px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -3188,6 +3280,7 @@ body {
   padding: 20px 22px 16px;
   border-bottom: 1px solid var(--booking-border);
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
+  flex-shrink: 0;
 }
 
 .booking-doc-modal-eyebrow {
@@ -3277,6 +3370,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 2;
+  flex-shrink: 0;
 }
 
 .booking-doc-tabs {
@@ -3405,9 +3499,12 @@ body {
 }
 
 .booking-doc-edit-scroll {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 16px 22px 24px;
   background: var(--booking-bg);
 }
@@ -3427,6 +3524,80 @@ body {
   background: linear-gradient(180deg, #fff 0%, #f8fafc 100%);
   box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
   z-index: 2;
+}
+
+.booking-doc-fee-footer__toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.booking-doc-fee-footer__toggle-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.booking-doc-fee-footer__chevron {
+  flex-shrink: 0;
+  margin-top: 2px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: var(--booking-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.booking-doc-fee-footer.is-collapsed .booking-doc-fee-footer__fields {
+  display: none;
+}
+
+.booking-doc-fee-footer.is-expanded .booking-doc-fee-footer__fields {
+  margin-top: 12px;
+}
+
+.booking-doc-fee-footer.is-collapsed .booking-doc-edit-summary--footer {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.booking-doc-fee-footer.is-collapsed .booking-doc-edit-summary--footer > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 6px;
+  text-align: center;
+}
+
+.booking-doc-fee-footer.is-collapsed .booking-doc-edit-summary--footer strong {
+  font-size: 1rem;
+}
+
+.booking-doc-fee-footer.is-collapsed .booking-doc-fee-footer__head p {
+  font-size: 0.8rem;
+}
+
+.booking-doc-fee-footer__toggle .booking-doc-fee-footer__head {
+  margin-bottom: 8px;
+}
+
+.booking-doc-fee-footer.is-collapsed .booking-doc-fee-footer__toggle .booking-doc-fee-footer__head {
+  margin-bottom: 6px;
 }
 
 .booking-doc-fee-footer__head {
@@ -4667,7 +4838,8 @@ body {
 .booking-doc-studio {
   width: 100%;
   max-width: 100vw;
-  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   flex-direction: column;
   background: #eef2f7;
@@ -4934,12 +5106,111 @@ body {
 }
 
 @media (max-width: 900px) {
+  .booking-doc-backdrop {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .admin-modal--documents {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .booking-doc-modal-head {
+    padding: 16px 14px 12px;
+    flex-shrink: 0;
+  }
+
+  .booking-doc-toolbar {
+    padding: 12px 14px;
+    flex-shrink: 0;
+  }
+
+  .booking-doc-edit-scroll {
+    padding: 12px 14px 20px;
+  }
+
+  .booking-doc-fee-footer {
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .booking-doc-fee-footer.is-collapsed .booking-doc-edit-summary--footer {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .booking-doc-fee-footer.is-collapsed .booking-doc-edit-summary--footer > div {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+
+  .booking-doc-fee-footer.is-collapsed .booking-doc-edit-summary--footer strong {
+    font-size: 0.95rem;
+  }
+
+  .booking-doc-fee-footer.is-collapsed .booking-doc-fee-footer__head p {
+    font-size: 0.78rem;
+  }
+
+  .booking-doc-edit-summary {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .booking-doc-edit-summary > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    text-align: left;
+  }
+
+  .booking-doc-edit-summary span {
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .booking-doc-edit-summary strong {
+    font-size: 1rem;
+  }
+
+  .booking-doc-actions {
+    width: 100%;
+  }
+
+  .booking-doc-actions .admin-button {
+    flex: 1;
+    min-height: 44px;
+  }
+
   .booking-doc-studio-toolbar {
     flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
   }
 
   .booking-doc-studio-controls {
     width: 100%;
-    justify-content: flex-end;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .booking-doc-studio-zoom {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .admin-modal--walk-in.admin-modal--documents {
+    width: 100%;
+    height: 100dvh;
+    max-height: 100dvh;
   }
 }

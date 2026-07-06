@@ -52,6 +52,8 @@ type LogEntry = {
 type SessionEntry = {
   id: string;
   displayName: string;
+  deviceLabel: string;
+  locationLabel: string;
   lastSeenLabel: string;
 };
 
@@ -949,21 +951,30 @@ export function AdminTeamPanel() {
         <h2>目前登入中</h2>
         {sessionsTableMissing ? (
           <p className="admin-muted admin-inline-setup-hint">
-            進階功能：在 Supabase 執行 <code>supabase/admin-sessions.sql</code> 後可顯示即時登入狀態
+            請在 Supabase SQL Editor 執行 <code>supabase/admin-sessions.sql</code>
+            （若已建表，再執行 <code>supabase/admin-sessions-device.sql</code>），
+            並重新登入後台後即可顯示登入帳號、裝置與位置。
           </p>
-        ) : null}
-        {sessions.length ? (
+        ) : sessions.length ? (
           <div className="admin-session-list">
             {sessions.map((session) => (
               <div key={session.id} className="admin-session-item">
                 <span className="admin-session-dot" aria-hidden />
-                <span>{session.displayName}</span>
-                <span className="admin-muted">{session.lastSeenLabel}</span>
+                <div className="admin-session-item__body">
+                  <strong className="admin-session-item__name">{session.displayName}</strong>
+                  <p className="admin-muted admin-session-item__meta">
+                    <span>{session.deviceLabel || '未知裝置'}</span>
+                    <span aria-hidden>·</span>
+                    <span>{session.locationLabel || '未知地區'}</span>
+                    <span aria-hidden>·</span>
+                    <span>{session.lastSeenLabel}</span>
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="admin-muted">目前沒有登入中的帳號</p>
+          <p className="admin-muted">目前沒有登入中的帳號（最近 5 分鐘內有活動的連線會顯示在此）</p>
         )}
       </div>
 
