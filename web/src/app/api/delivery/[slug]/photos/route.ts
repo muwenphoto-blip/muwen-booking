@@ -6,6 +6,7 @@ import {
   resolveDeliveryPhase,
 } from '@/lib/delivery/access';
 import { getDeliveryGuestSession, loadDeliveryBySlug, syncDeliveryExpiry } from '@/lib/delivery/store';
+import { loadDeliveryPhotoDataUrl } from '@/lib/delivery/load-photo-file';
 import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -57,18 +58,29 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     const items = await Promise.all(
       (photos ?? []).map(async (photo) => {
-        const access = await signPhotoAccessToken({
-          scope: 'guest',
-          slug,
-          deliveryId: delivery.id,
-          photoId: photo.id,
-        });
+        const isPdf = photo.file_name.toLowerCase().endsWith('.pdf');
+        let url: string | null = null;
+        if (photo.kind === 'preview' && !isPdf) {
+          try {
+            url = await loadDeliveryPhotoDataUrl(photo.storage_path);
+          } catch {
+            url = null;
+          }
+        } else if (!isPdf) {
+          const access = await signPhotoAccessToken({
+            scope: 'guest',
+            slug,
+            deliveryId: delivery.id,
+            photoId: photo.id,
+          });
+          url = `/api/delivery/${slug}/photos/${photo.id}/image?access=${encodeURIComponent(access)}`;
+        }
         return {
           id: photo.id,
           kind: photo.kind,
           file_name: photo.file_name,
           selection: photo.selection,
-          url: `/api/delivery/${slug}/photos/${photo.id}/image?access=${encodeURIComponent(access)}`,
+          url,
         };
       }),
     );

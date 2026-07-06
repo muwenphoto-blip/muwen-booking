@@ -2,11 +2,23 @@
 
 import { useEffect, useState } from 'react';
 
-export function DeliveryImage({ src, alt }: { src: string; alt: string }) {
+export function DeliveryImage({ src, alt }: { src: string | null | undefined; alt: string }) {
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
+    if (!src) {
+      setFailed(true);
+      setBlobUrl(null);
+      return undefined;
+    }
+
+    if (src.startsWith('data:')) {
+      setFailed(false);
+      setBlobUrl(src);
+      return undefined;
+    }
+
     let objectUrl: string | null = null;
     let cancelled = false;
     setFailed(false);
@@ -35,7 +47,7 @@ export function DeliveryImage({ src, alt }: { src: string; alt: string }) {
     };
   }, [src]);
 
-  if (failed) {
+  if (!src || failed) {
     return <div className="delivery-photo-placeholder">無法載入</div>;
   }
   if (!blobUrl) {

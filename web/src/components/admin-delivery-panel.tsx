@@ -35,7 +35,7 @@ type PhotoRow = {
   file_name: string;
   selection: string;
   sort_order: number;
-  preview_url?: string;
+  preview_url?: string | null;
 };
 
 function phaseLabel(delivery: DeliveryInfo | null): string {
@@ -362,13 +362,7 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                 <div className="delivery-admin-grid">
                   {previewPhotos.map((photo) => (
                     <article key={photo.id} className="delivery-admin-photo">
-                      <DeliveryImage
-                        src={
-                          photo.preview_url ||
-                          `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview`
-                        }
-                        alt={photo.file_name}
-                      />
+                      <DeliveryImage src={photo.preview_url} alt={photo.file_name} />
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <p className="delivery-photo-meta">
                         {photo.selection === 'reject' ? '客人標記刪除' : '保留'}

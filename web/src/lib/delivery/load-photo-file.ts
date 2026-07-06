@@ -32,3 +32,9 @@ export async function loadDeliveryPhotoFile(storagePath: string): Promise<{
     contentType: data.type || contentTypeFromPath(storagePath),
   };
 }
+
+export async function loadDeliveryPhotoDataUrl(storagePath: string): Promise<string> {
+  const file = await loadDeliveryPhotoFile(storagePath);
+  const base64 = Buffer.from(file.body).toString('base64');
+  return `data:${file.contentType};base64,${base64}`;
+}

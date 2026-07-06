@@ -3,7 +3,7 @@ import { canCreateDelivery } from '@/lib/admin/bookings';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { isManagerRole } from '@/lib/admin/session';
 import { hashDeliveryDefaultPassword } from '@/lib/delivery/default-password';
-import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
+import { loadDeliveryPhotoDataUrl } from '@/lib/delivery/load-photo-file';
 import { generateDeliverySlug } from '@/lib/delivery/slug';
 import {
   buildDeliveryAbsoluteUrl,
@@ -46,24 +46,25 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (delivery) {
       const { data: photoRows, error: photoError } = await supabase
         .from('delivery_photos')
-        .select('id, kind, file_name, selection, sort_order, created_at')
+        .select('id, kind, file_name, selection, sort_order, created_at, storage_path')
         .eq('delivery_id', delivery.id)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
       if (photoError) throw new Error(photoError.message);
       photos = await Promise.all(
         (photoRows ?? []).map(async (photo) => {
-          if (photo.kind !== 'preview') return photo;
-          const access = await signPhotoAccessToken({
-            scope: 'admin',
-            bookingId,
-            deliveryId: delivery.id,
-            photoId: photo.id,
-          });
-          return {
-            ...photo,
-            preview_url: `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview?access=${encodeURIComponent(access)}`,
-          };
+          if (photo.kind !== 'preview') {
+            const { storage_path: _, ...rest } = photo;
+            return rest;
+          }
+          try {
+            const preview_url = await loadDeliveryPhotoDataUrl(photo.storage_path);
+            const { storage_path: _, ...rest } = photo;
+            return { ...rest, preview_url };
+          } catch {
+            const { storage_path: _, ...rest } = photo;
+            return { ...rest, preview_url: null };
+          }
         }),
       );
       finalCount = await countFinalPhotos(delivery.id);

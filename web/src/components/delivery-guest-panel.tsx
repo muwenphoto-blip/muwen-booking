@@ -16,7 +16,7 @@ type PhotoItem = {
   id: string;
   file_name: string;
   selection: string;
-  url: string;
+  url: string | null;
 };
 
 type View = 'login' | 'change-password' | 'selection' | 'download' | 'locked' | 'expired';
