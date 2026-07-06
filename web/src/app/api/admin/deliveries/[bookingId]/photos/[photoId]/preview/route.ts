@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/admin/get-session';
-import { DELIVERY_STORAGE_BUCKET } from '@/lib/delivery/constants';
+import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
 import { loadDeliveryByBookingId } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -27,12 +27,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (error) throw new Error(error.message);
     if (!photo) throw new Error('找不到照片');
 
-    const { data: signed, error: signError } = await supabase.storage
-      .from(DELIVERY_STORAGE_BUCKET)
-      .createSignedUrl(photo.storage_path, 60 * 30);
-    if (signError) throw new Error(signError.message);
-
-    return NextResponse.json({ url: signed.signedUrl });
+    const file = await loadDeliveryPhotoFile(photo.storage_path);
+    return new NextResponse(file.body, {
+      headers: {
+        'Content-Type': file.contentType,
+        'Cache-Control': 'private, max-age=900',
+      },
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : '無法取得預覽' },

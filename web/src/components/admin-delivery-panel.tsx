@@ -36,8 +36,6 @@ type PhotoRow = {
   sort_order: number;
 };
 
-type PreviewCache = Record<string, string>;
-
 function phaseLabel(delivery: DeliveryInfo | null): string {
   if (!delivery) return '尚未建立';
   if (delivery.phase === 'delivering') return '可下載';
@@ -59,7 +57,6 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
   const [deliveryUrl, setDeliveryUrl] = useState<string | null>(null);
   const [canCreate, setCanCreate] = useState(false);
   const [canManage, setCanManage] = useState(false);
-  const [previewUrls, setPreviewUrls] = useState<PreviewCache>({});
 
   const previewPhotos = useMemo(() => photos.filter((p) => p.kind === 'preview'), [photos]);
   const finalPhotos = useMemo(() => photos.filter((p) => p.kind === 'final'), [photos]);
@@ -87,34 +84,6 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
       .catch((err) => setError(err instanceof Error ? err.message : '載入失敗'))
       .finally(() => setLoading(false));
   }, [loadData]);
-
-  useEffect(() => {
-    if (!photos.length) return;
-    let cancelled = false;
-
-    async function loadPreviews() {
-      const next: PreviewCache = {};
-      await Promise.all(
-        photos.map(async (photo) => {
-          try {
-            const res = await fetch(
-              `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview`,
-            );
-            const data = await res.json();
-            if (res.ok && data.url) next[photo.id] = data.url;
-          } catch {
-            /* ignore preview failures */
-          }
-        }),
-      );
-      if (!cancelled) setPreviewUrls(next);
-    }
-
-    loadPreviews();
-    return () => {
-      cancelled = true;
-    };
-  }, [photos, bookingId]);
 
   async function createDelivery() {
     setError('');
@@ -391,12 +360,11 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                 <div className="delivery-admin-grid">
                   {previewPhotos.map((photo) => (
                     <article key={photo.id} className="delivery-admin-photo">
-                      {previewUrls[photo.id] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={previewUrls[photo.id]} alt={photo.file_name} />
-                      ) : (
-                        <div className="delivery-photo-placeholder">載入中…</div>
-                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview`}
+                        alt={photo.file_name}
+                      />
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <p className="delivery-photo-meta">
                         {photo.selection === 'reject' ? '客人標記刪除' : '保留'}

@@ -34,6 +34,18 @@ export function buildSelectionZipFilename(options: {
   return `選片_${options.fallbackId.slice(0, 8)}.zip`;
 }
 
+export function buildFinalsZipFilename(options: {
+  caseNumber: string;
+  customerName: string;
+  fallbackId: string;
+}): string {
+  const caseNo = sanitizeFilenamePart(options.caseNumber, 'CASE');
+  const name = sanitizeFilenamePart(options.customerName, '客戶');
+  const base = `${caseNo}_${name}_成品`;
+  if (base.replace(/_/g, '').length >= 3) return `${base}.zip`;
+  return `成品_${options.fallbackId.slice(0, 8)}.zip`;
+}
+
 function sanitizeFilenamePart(value: string, fallback: string): string {
   const cleaned = String(value || '')
     .trim()

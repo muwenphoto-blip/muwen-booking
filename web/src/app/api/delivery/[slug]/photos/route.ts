@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DELIVERY_STORAGE_BUCKET } from '@/lib/delivery/constants';
 import {
   daysUntilExpiry,
   formatExpiryDate,
@@ -55,21 +54,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const { data: photos, error } = await query;
     if (error) throw new Error(error.message);
 
-    const signed = await Promise.all(
-      (photos ?? []).map(async (photo) => {
-        const { data: signedData, error: signError } = await supabase.storage
-          .from(DELIVERY_STORAGE_BUCKET)
-          .createSignedUrl(photo.storage_path, 60 * 30);
-        if (signError) throw new Error(signError.message);
-        return {
-          id: photo.id,
-          kind: photo.kind,
-          file_name: photo.file_name,
-          selection: photo.selection,
-          url: signedData.signedUrl,
-        };
-      }),
-    );
+    const items = (photos ?? []).map((photo) => ({
+      id: photo.id,
+      kind: photo.kind,
+      file_name: photo.file_name,
+      selection: photo.selection,
+      url: `/api/delivery/${slug}/photos/${photo.id}/image`,
+    }));
 
     return NextResponse.json({
       phase,
@@ -79,7 +70,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       finalExpiresLabel: formatExpiryDate(delivery.final_expires_at),
       daysRemaining: daysUntilExpiry(delivery.final_expires_at),
       showExpiryNotice: phase === 'delivering',
-      photos: signed,
+      photos: items,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : '無法載入照片';

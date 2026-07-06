@@ -3114,24 +3114,32 @@ body {
   color: #dc2626;
 }
 
-.delivery-download-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.delivery-download-actions {
+  margin: 0 0 16px;
 }
 
-.delivery-download-list li {
+.delivery-download-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.delivery-download-card {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid var(--booking-border);
   border-radius: 8px;
+  background: #fff;
+}
+
+.delivery-download-card img,
+.delivery-download-card .delivery-photo-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
 .delivery-modal-backdrop {

@@ -18,34 +18,38 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (!delivery || delivery.id !== guest.deliveryId || !delivery.password_changed) {
       return NextResponse.json({ error: '請先登入' }, { status: 401 });
     }
-    if (resolveDeliveryPhase(delivery) !== 'delivering') {
-      throw new Error('目前尚不可下載');
+    if (delivery.phase === 'expired') {
+      throw new Error('交片已到期');
     }
 
+    const phase = resolveDeliveryPhase(delivery);
     const supabase = createAdminSupabaseClient();
     const { data: photo, error } = await supabase
       .from('delivery_photos')
-      .select('id, storage_path, file_name, kind')
+      .select('storage_path, kind')
       .eq('id', photoId)
       .eq('delivery_id', delivery.id)
-      .eq('kind', 'final')
       .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!photo) throw new Error('找不到檔案');
+    if (!photo) throw new Error('找不到照片');
+
+    if (phase === 'delivering' && photo.kind !== 'final') {
+      throw new Error('找不到檔案');
+    }
+    if (phase !== 'delivering' && photo.kind !== 'preview') {
+      throw new Error('找不到照片');
+    }
 
     const file = await loadDeliveryPhotoFile(photo.storage_path);
-    const filename = encodeURIComponent(photo.file_name || 'download');
     return new NextResponse(file.body, {
       headers: {
         'Content-Type': file.contentType,
-        'Content-Disposition': `attachment; filename*=UTF-8''${filename}`,
-        'Cache-Control': 'no-store',
+        'Cache-Control': 'private, max-age=900',
       },
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : '下載失敗' },
-      { status: 400 },
-    );
+    const message = err instanceof Error ? err.message : '無法載入照片';
+    const status = message === '請先登入' ? 401 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }

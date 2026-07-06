@@ -318,20 +318,42 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
             </p>
           ) : null}
           {photos.length ? (
-            <ul className="delivery-download-list">
-              {photos.map((photo) => (
-                <li key={photo.id}>
-                  <span>{photo.file_name}</span>
+            <>
+              {photos.length > 1 ? (
+                <p className="delivery-download-actions">
                   <a
-                    href={`/api/delivery/${slug}/download/${photo.id}`}
-                    className="delivery-button small"
+                    href={`/api/delivery/${slug}/download-all`}
+                    className="delivery-button"
                     download
                   >
-                    下載
+                    打包下載全部（{photos.length} 個檔案）
                   </a>
-                </li>
-              ))}
-            </ul>
+                </p>
+              ) : null}
+              <div className="delivery-download-grid">
+                {photos.map((photo) => {
+                  const isPdf = photo.file_name.toLowerCase().endsWith('.pdf');
+                  return (
+                    <article key={photo.id} className="delivery-download-card">
+                      {isPdf ? (
+                        <div className="delivery-photo-placeholder">PDF</div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photo.url} alt={photo.file_name} />
+                      )}
+                      <p className="delivery-photo-name">{photo.file_name}</p>
+                      <a
+                        href={`/api/delivery/${slug}/download/${photo.id}`}
+                        className="delivery-button small"
+                        download
+                      >
+                        下載
+                      </a>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
           ) : (
             <p className="delivery-muted">尚無可下載的成品。</p>
           )}
