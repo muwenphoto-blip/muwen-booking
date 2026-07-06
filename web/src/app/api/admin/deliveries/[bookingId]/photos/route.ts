@@ -4,6 +4,7 @@ import { getAdminSession } from '@/lib/admin/get-session';
 import { isManagerRole } from '@/lib/admin/session';
 import { DELIVERY_STORAGE_BUCKET } from '@/lib/delivery/constants';
 import { buildPreviewImage } from '@/lib/delivery/image-processing';
+import { toStorageUploadBody } from '@/lib/delivery/storage-bytes';
 import { computeFinalExpiryFromNow } from '@/lib/delivery/access';
 import { loadDeliveryByBookingId } from '@/lib/delivery/store';
 import type { PhotoKind } from '@/lib/delivery/types';
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
       const { error: uploadError } = await supabase.storage
         .from(DELIVERY_STORAGE_BUCKET)
-        .upload(storagePath, body, { contentType, upsert: false });
+        .upload(storagePath, toStorageUploadBody(body), { contentType, upsert: false });
       if (uploadError) {
         if (uploadError.message.toLowerCase().includes('bucket')) {
           throw new Error('Storage 尚未建立 photo-deliveries bucket，請至 Supabase 執行 photo-delivery.sql');
@@ -92,12 +93,18 @@ export async function POST(request: NextRequest, context: RouteContext) {
         throw new Error(uploadError.message);
       }
 
-      const { error: verifyError } = await supabase.storage
+      const { data: verifyBlob, error: verifyReadError } = await supabase.storage
         .from(DELIVERY_STORAGE_BUCKET)
         .download(storagePath);
-      if (verifyError) {
+      if (verifyReadError || !verifyBlob) {
         await supabase.storage.from(DELIVERY_STORAGE_BUCKET).remove([storagePath]);
         throw new Error('檔案寫入 Storage 失敗，請確認 Supabase 已建立 photo-deliveries bucket');
+      }
+      const verifyBytes = new Uint8Array(await verifyBlob.arrayBuffer());
+      const isJpeg = kind === 'preview' || mime === 'image/jpeg';
+      if (isJpeg && (verifyBytes[0] !== 0xff || verifyBytes[1] !== 0xd8)) {
+        await supabase.storage.from(DELIVERY_STORAGE_BUCKET).remove([storagePath]);
+        throw new Error('上傳的圖片檔案損壞，請重新上傳');
       }
 
       const { data: row, error: insertError } = await supabase

@@ -15,6 +15,9 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ bookingId: string }> };
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const session = await getAdminSession();
@@ -54,13 +57,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
       photos = await Promise.all(
         (photoRows ?? []).map(async (photo) => {
           if (photo.kind !== 'preview') return photo;
-          const preview_token = await signPhotoAccessToken({
+          const token = await signPhotoAccessToken({
             scope: 'admin',
             bookingId,
             deliveryId: delivery.id,
             photoId: photo.id,
           });
-          return { ...photo, preview_token };
+          return {
+            ...photo,
+            preview_src: `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview?access=${encodeURIComponent(token)}`,
+          };
         }),
       );
       finalCount = await countFinalPhotos(delivery.id);

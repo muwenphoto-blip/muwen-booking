@@ -7,6 +7,9 @@ import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ slug: string; photoId: string }> };
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug, photoId } = await context.params;
@@ -50,10 +53,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const file = await loadDeliveryPhotoFile(photo.storage_path);
-    return new NextResponse(file.body, {
+    return new NextResponse(new Uint8Array(file.body), {
       headers: {
         'Content-Type': file.contentType,
-        'Cache-Control': 'private, no-store, max-age=0',
+        'Cache-Control': 'private, no-store, no-cache, must-revalidate',
+        'CDN-Cache-Control': 'no-store',
+        'Vercel-CDN-Cache-Control': 'no-store',
       },
     });
   } catch (err) {
