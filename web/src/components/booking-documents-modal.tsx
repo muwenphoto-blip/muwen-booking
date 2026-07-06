@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BookingDocumentUnifiedEdit, BookingDocumentFeeFooter } from '@/components/booking-document-edit-views';
 import { BookingDocumentPrintBundle } from '@/components/booking-document-print-bundle';
 import { printDocument } from '@/lib/admin/booking-document-export';
@@ -9,7 +9,7 @@ import { applyDocumentFinancialSync } from '@/components/booking-document-shared
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import { clearFieldError } from '@/lib/form-validation';
-import { validateDocumentFieldOnBlur } from '@/lib/admin/document-form-validation';
+import { isDocumentFormComplete, validateDocumentFieldOnBlur } from '@/lib/admin/document-form-validation';
 import {
   buildTeamHandlerOptions,
   type TeamHandlerOption,
@@ -158,6 +158,40 @@ export function BookingDocumentsModal({
     ? { state, shopName, shopFullName, shopAddress, shopPhone }
     : null;
 
+  const formComplete = useMemo(() => {
+    if (!state || !services.length) return false;
+    return isDocumentFormComplete(state, services);
+  }, [state, services]);
+
+  const actionButtons = (
+    <>
+      <button
+        type="button"
+        className="admin-button"
+        disabled={!state || busy !== null || !dirty}
+        onClick={handleSave}
+      >
+        {busy === 'save' ? '儲存中…' : '儲存'}
+      </button>
+      <button
+        type="button"
+        className="admin-button secondary"
+        disabled={!state || busy !== null}
+        onClick={handlePrint}
+      >
+        {busy === 'print' ? '處理中…' : '列印'}
+      </button>
+      <button
+        type="button"
+        className="admin-button secondary"
+        disabled={!state || busy !== null}
+        onClick={handleOpenStudio}
+      >
+        下載
+      </button>
+    </>
+  );
+
   function handleOpenStudio() {
     if (!state) return;
     if (dirty && !window.confirm('尚有未儲存的變更，工作室會使用目前畫面內容；建議先按儲存。仍要繼續？')) {
@@ -202,41 +236,16 @@ export function BookingDocumentsModal({
           </button>
         </div>
 
-        <div className="booking-doc-toolbar">
+        <div className="booking-doc-toolbar booking-doc-toolbar--desktop">
           <p className="booking-doc-toolbar-hint">
             {saveMessage || (dirty ? '有未儲存的變更' : '編輯區為後台表單，不會顯示成紙本版面')}
           </p>
-          <div className="booking-doc-actions">
-            <button
-              type="button"
-              className="admin-button"
-              disabled={!state || busy !== null || !dirty}
-              onClick={handleSave}
-            >
-              {busy === 'save' ? '儲存中…' : '儲存'}
-            </button>
-            <button
-              type="button"
-              className="admin-button secondary"
-              disabled={!state || busy !== null}
-              onClick={handlePrint}
-            >
-              {busy === 'print' ? '處理中…' : '列印'}
-            </button>
-            <button
-              type="button"
-              className="admin-button secondary"
-              disabled={!state || busy !== null}
-              onClick={handleOpenStudio}
-            >
-              下載
-            </button>
-          </div>
+          <div className="booking-doc-actions">{actionButtons}</div>
         </div>
 
         {error ? <p className="admin-error booking-doc-error">{error}</p> : null}
         {setupHint ? <p className="admin-warning booking-doc-setup-hint">{setupHint}</p> : null}
-        {saveMessage ? <p className="admin-success booking-doc-save-hint">{saveMessage}</p> : null}
+        {saveMessage ? <p className="admin-success booking-doc-save-hint booking-doc-save-hint--desktop">{saveMessage}</p> : null}
 
         {loading ? (
           <div className="booking-doc-loading" aria-hidden="true">
@@ -246,9 +255,17 @@ export function BookingDocumentsModal({
         ) : sharedProps ? (
           <div className="booking-doc-edit-body">
             <div className="booking-doc-edit-scroll">
+              {saveMessage ? (
+                <p className="admin-success booking-doc-save-hint booking-doc-save-hint--mobile">{saveMessage}</p>
+              ) : null}
               <BookingDocumentUnifiedEdit {...sharedProps} />
             </div>
             <BookingDocumentFeeFooter {...sharedProps} />
+            {formComplete ? (
+              <div className="booking-doc-mobile-actions">
+                <div className="booking-doc-actions">{actionButtons}</div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <p className="admin-muted booking-doc-empty">無法顯示文件內容。</p>

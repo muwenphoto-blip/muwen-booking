@@ -3171,13 +3171,18 @@ body {
 
 .booking-walk-in-footer {
   display: flex;
-  justify-content: flex-end;
+  justify-content: stretch;
   gap: 8px;
   flex-shrink: 0;
   margin-top: 0;
   padding: 14px 22px calc(14px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--booking-border);
   background: #fff;
+}
+
+.booking-walk-in-footer .admin-button {
+  flex: 1;
+  min-height: 48px;
 }
 
 .booking-walk-in-success {
@@ -3427,6 +3432,34 @@ body {
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.booking-doc-mobile-actions {
+  display: none;
+  flex-shrink: 0;
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--booking-border);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.booking-doc-mobile-actions .booking-doc-actions {
+  width: 100%;
+}
+
+.booking-doc-mobile-actions .admin-button {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.booking-doc-save-hint--mobile {
+  display: none;
+  margin: 0 0 12px;
+}
+
+.booking-doc-save-hint--desktop {
+  display: block;
 }
 
 .booking-doc-toolbar-hint {
@@ -5121,6 +5154,35 @@ body {
   .booking-doc-modal-head {
     padding: 16px 14px 12px;
     flex-shrink: 0;
+  }
+
+  .admin-modal--documents .booking-doc-modal-sub,
+  .admin-modal--walk-in .booking-doc-modal-sub {
+    display: none;
+  }
+
+  .booking-doc-toolbar--desktop {
+    display: none;
+  }
+
+  .booking-doc-mobile-actions {
+    display: block;
+  }
+
+  .booking-doc-save-hint--desktop {
+    display: none;
+  }
+
+  .booking-doc-save-hint--mobile {
+    display: block;
+  }
+
+  .booking-doc-edit-body:has(.booking-doc-mobile-actions) .booking-doc-fee-footer {
+    padding-bottom: 12px;
+  }
+
+  .booking-walk-in-footer {
+    padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
   }
 
   .booking-doc-toolbar {

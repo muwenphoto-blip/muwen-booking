@@ -58,6 +58,18 @@ export function validateWalkInFormFields(params: {
   return errors;
 }
 
+export function isWalkInFormComplete(params: {
+  date: string;
+  staff: string;
+  selectedTime: string;
+  headcount: string;
+  gender: string;
+  document: BookingDocumentState;
+  services: ServiceItem[];
+}): boolean {
+  return Object.keys(validateWalkInFormFields(params)).length === 0;
+}
+
 export type TeamHandlerOption = { value: string; label: string };
 
 export function buildTeamHandlerOptions(data: {

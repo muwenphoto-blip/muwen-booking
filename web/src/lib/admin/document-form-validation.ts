@@ -3,6 +3,19 @@ import { serviceOptionsFor } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import { runValidation, validateFieldOnBlur, type ValidationRule } from '@/lib/form-validation';
 
+function hasFilledItemRow(rows: BookingDocumentState['itemRows']): boolean {
+  return rows.some((row) =>
+    Boolean(
+      row.serviceContent ||
+        row.packageChoice ||
+        row.price ||
+        row.discount ||
+        row.itemTotal ||
+        row.quantity,
+    ),
+  );
+}
+
 export function buildDocumentCustomerRules(state: BookingDocumentState): ValidationRule[] {
   return [
     {
@@ -94,4 +107,24 @@ export function validateDocumentCustomerFields(
   }
 
   return errors;
+}
+
+export function validateDocumentFormFields(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): Record<string, string> {
+  const errors = validateDocumentCustomerFields(state, services);
+
+  if (!hasFilledItemRow(state.itemRows)) {
+    errors['doc-item-rows'] = '請至少填寫一筆服務明細';
+  }
+
+  return errors;
+}
+
+export function isDocumentFormComplete(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): boolean {
+  return Object.keys(validateDocumentFormFields(state, services)).length === 0;
 }

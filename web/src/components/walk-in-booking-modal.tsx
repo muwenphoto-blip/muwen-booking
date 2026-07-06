@@ -16,7 +16,7 @@ import { BookingDocumentPrintBundle } from '@/components/booking-document-print-
 import { FormField } from '@/components/form-field';
 import { clearFieldError, focusFirstInvalid } from '@/lib/form-validation';
 import { validateDocumentFieldOnBlur } from '@/lib/admin/document-form-validation';
-import { validateWalkInFormFields, buildTeamHandlerOptions, type TeamHandlerOption } from '@/lib/admin/walk-in-form-validation';
+import { validateWalkInFormFields, buildTeamHandlerOptions, isWalkInFormComplete, type TeamHandlerOption } from '@/lib/admin/walk-in-form-validation';
 import {
   addDays,
   findNextOpenDate,
@@ -205,6 +205,19 @@ export function WalkInBookingModal({
     if (!availableSlots.length) return '此日期無可預約時段。';
     return '點選時段後填寫下方登記資料。';
   }, [slotsLoading, isShopClosed, availableSlots.length]);
+
+  const formComplete = useMemo(() => {
+    if (!docState || !config) return false;
+    return isWalkInFormComplete({
+      date,
+      staff,
+      selectedTime,
+      headcount,
+      gender,
+      document: docState,
+      services: config.services,
+    });
+  }, [docState, config, date, staff, selectedTime, headcount, gender]);
 
   const printProps =
     docState && config
@@ -548,14 +561,13 @@ export function WalkInBookingModal({
             </div>
             <BookingDocumentFeeFooter {...sharedDocProps} />
 
-            <div className="booking-walk-in-footer">
-              <button type="button" className="admin-button secondary" onClick={onClose}>
-                取消
-              </button>
-              <button type="submit" className="admin-button" disabled={submitting}>
-                {submitting ? '建立中…' : '建立門市預約'}
-              </button>
-            </div>
+            {formComplete ? (
+              <div className="booking-walk-in-footer">
+                <button type="submit" className="admin-button" disabled={submitting}>
+                  {submitting ? '建立中…' : '建立門市預約'}
+                </button>
+              </div>
+            ) : null}
           </form>
         )}
 
