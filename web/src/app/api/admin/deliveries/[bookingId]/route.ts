@@ -3,6 +3,7 @@ import { canCreateDelivery } from '@/lib/admin/bookings';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { isManagerRole } from '@/lib/admin/session';
 import { hashDeliveryDefaultPassword } from '@/lib/delivery/default-password';
+import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
 import { generateDeliverySlug } from '@/lib/delivery/slug';
 import {
   buildDeliveryAbsoluteUrl,
@@ -50,7 +51,21 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
       if (photoError) throw new Error(photoError.message);
-      photos = photoRows ?? [];
+      photos = await Promise.all(
+        (photoRows ?? []).map(async (photo) => {
+          if (photo.kind !== 'preview') return photo;
+          const access = await signPhotoAccessToken({
+            scope: 'admin',
+            bookingId,
+            deliveryId: delivery.id,
+            photoId: photo.id,
+          });
+          return {
+            ...photo,
+            preview_url: `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview?access=${access}`,
+          };
+        }),
+      );
       finalCount = await countFinalPhotos(delivery.id);
     }
 

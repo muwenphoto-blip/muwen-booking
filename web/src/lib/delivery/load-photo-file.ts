@@ -16,7 +16,11 @@ export async function loadDeliveryPhotoFile(storagePath: string): Promise<{
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase.storage.from(DELIVERY_STORAGE_BUCKET).download(storagePath);
   if (error) {
-    throw new Error(error.message || '無法讀取照片檔案');
+    const message = error.message || '無法讀取照片檔案';
+    if (message.toLowerCase().includes('not found') || message.toLowerCase().includes('object')) {
+      throw new Error('Storage 找不到檔案，請刪除後重新上傳');
+    }
+    throw new Error(message);
   }
   if (!data) {
     throw new Error('找不到照片檔案，請重新上傳');

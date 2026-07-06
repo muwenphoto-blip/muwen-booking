@@ -34,6 +34,7 @@ type PhotoRow = {
   file_name: string;
   selection: string;
   sort_order: number;
+  preview_url?: string;
 };
 
 function phaseLabel(delivery: DeliveryInfo | null): string {
@@ -362,8 +363,19 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                     <article key={photo.id} className="delivery-admin-photo">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview`}
+                        src={
+                          photo.preview_url ||
+                          `/api/admin/deliveries/${bookingId}/photos/${photo.id}/preview`
+                        }
                         alt={photo.file_name}
+                        onError={(e) => {
+                          e.currentTarget.replaceWith(
+                            Object.assign(document.createElement('div'), {
+                              className: 'delivery-photo-placeholder',
+                              textContent: '無法載入',
+                            }),
+                          );
+                        }}
                       />
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <p className="delivery-photo-meta">

@@ -1,21 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/admin/get-session';
+import { authorizeAdminPhotoAccess } from '@/lib/delivery/authorize-photo-access';
 import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
 import { loadDeliveryByBookingId } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ bookingId: string; photoId: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
-    const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: '請先登入後台' }, { status: 401 });
-    }
-
     const { bookingId, photoId } = await context.params;
     const delivery = await loadDeliveryByBookingId(bookingId);
     if (!delivery) throw new Error('找不到交片案件');
+
+    const allowed = await authorizeAdminPhotoAccess(request, {
+      bookingId,
+      photoId,
+      deliveryId: delivery.id,
+    });
+    if (!allowed) {
+      return NextResponse.json({ error: '請先登入後台' }, { status: 401 });
+    }
 
     const supabase = createAdminSupabaseClient();
     const { data: photo, error } = await supabase
@@ -31,7 +35,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return new NextResponse(file.body, {
       headers: {
         'Content-Type': file.contentType,
-        'Cache-Control': 'private, max-age=900',
+        'Cache-Control': 'private, no-store, max-age=0',
       },
     });
   } catch (err) {

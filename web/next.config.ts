@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ['sharp'],
   // 讓手機用區域 IP 連 dev server 時，HMR / 前端資源不會被擋
   allowedDevOrigins: [
     "localhost",

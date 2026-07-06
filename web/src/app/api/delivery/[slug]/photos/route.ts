@@ -6,6 +6,7 @@ import {
   resolveDeliveryPhase,
 } from '@/lib/delivery/access';
 import { getDeliveryGuestSession, loadDeliveryBySlug, syncDeliveryExpiry } from '@/lib/delivery/store';
+import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ slug: string }> };
@@ -54,13 +55,23 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const { data: photos, error } = await query;
     if (error) throw new Error(error.message);
 
-    const items = (photos ?? []).map((photo) => ({
-      id: photo.id,
-      kind: photo.kind,
-      file_name: photo.file_name,
-      selection: photo.selection,
-      url: `/api/delivery/${slug}/photos/${photo.id}/image`,
-    }));
+    const items = await Promise.all(
+      (photos ?? []).map(async (photo) => {
+        const access = await signPhotoAccessToken({
+          scope: 'guest',
+          slug,
+          deliveryId: delivery.id,
+          photoId: photo.id,
+        });
+        return {
+          id: photo.id,
+          kind: photo.kind,
+          file_name: photo.file_name,
+          selection: photo.selection,
+          url: `/api/delivery/${slug}/photos/${photo.id}/image?access=${access}`,
+        };
+      }),
+    );
 
     return NextResponse.json({
       phase,

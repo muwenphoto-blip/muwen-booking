@@ -85,7 +85,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
       const { error: uploadError } = await supabase.storage
         .from(DELIVERY_STORAGE_BUCKET)
         .upload(storagePath, body, { contentType, upsert: false });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) {
+        if (uploadError.message.toLowerCase().includes('bucket')) {
+          throw new Error('Storage 尚未建立 photo-deliveries bucket，請至 Supabase 執行 photo-delivery.sql');
+        }
+        throw new Error(uploadError.message);
+      }
+
+      const { error: verifyError } = await supabase.storage
+        .from(DELIVERY_STORAGE_BUCKET)
+        .download(storagePath);
+      if (verifyError) {
+        await supabase.storage.from(DELIVERY_STORAGE_BUCKET).remove([storagePath]);
+        throw new Error('檔案寫入 Storage 失敗，請確認 Supabase 已建立 photo-deliveries bucket');
+      }
 
       const { data: row, error: insertError } = await supabase
         .from('delivery_photos')

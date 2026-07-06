@@ -1,21 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveDeliveryPhase } from '@/lib/delivery/access';
+import { authorizeGuestPhotoAccess } from '@/lib/delivery/authorize-photo-access';
 import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
-import { getDeliveryGuestSession, loadDeliveryBySlug } from '@/lib/delivery/store';
+import { loadDeliveryBySlug } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ slug: string; photoId: string }> };
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug, photoId } = await context.params;
-    const guest = await getDeliveryGuestSession();
-    if (!guest || guest.slug !== slug) {
+    const delivery = await loadDeliveryBySlug(slug);
+    if (!delivery) {
       return NextResponse.json({ error: '請先登入' }, { status: 401 });
     }
 
-    const delivery = await loadDeliveryBySlug(slug);
-    if (!delivery || delivery.id !== guest.deliveryId || !delivery.password_changed) {
+    const allowed = await authorizeGuestPhotoAccess(request, {
+      slug,
+      photoId,
+      deliveryId: delivery.id,
+    });
+    if (!allowed || !delivery.password_changed) {
       return NextResponse.json({ error: '請先登入' }, { status: 401 });
     }
     if (delivery.phase === 'expired') {
@@ -44,7 +49,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     return new NextResponse(file.body, {
       headers: {
         'Content-Type': file.contentType,
-        'Cache-Control': 'private, max-age=900',
+        'Cache-Control': 'private, no-store, max-age=0',
       },
     });
   } catch (err) {
