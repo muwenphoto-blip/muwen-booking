@@ -106,7 +106,7 @@ create table if not exists public.admin_users (
   password_hash text not null,
   active boolean not null default true,
   role text not null default '副'
-    check (role in ('主', '副主', '副')),
+    check (role in ('主', '副主', '副', '現場')),
   photographer_name text not null default '',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

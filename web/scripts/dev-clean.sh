@@ -3,14 +3,17 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+PORTS="3000 3001"
 if command -v lsof >/dev/null 2>&1; then
-  PIDS=$(lsof -ti :3000 2>/dev/null || true)
-  if [ -n "${PIDS}" ]; then
-    echo "停止佔用 port 3000 的行程：${PIDS}"
-    # shellcheck disable=SC2086
-    kill -9 ${PIDS} 2>/dev/null || true
-    sleep 1
-  fi
+  for PORT in $PORTS; do
+    PIDS=$(lsof -ti :"$PORT" 2>/dev/null || true)
+    if [ -n "${PIDS}" ]; then
+      echo "停止佔用 port ${PORT} 的行程：${PIDS}"
+      # shellcheck disable=SC2086
+      kill -9 ${PIDS} 2>/dev/null || true
+    fi
+  done
+  sleep 2
 fi
 
 echo "清除 .next 快取…"

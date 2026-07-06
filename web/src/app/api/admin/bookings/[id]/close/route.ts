@@ -7,6 +7,7 @@ import {
 } from '@/lib/admin/bookings';
 import { assertManagerRole } from '@/lib/admin/permissions';
 import { getAdminSession } from '@/lib/admin/get-session';
+import { loadDeliveryByBookingId, countFinalPhotos } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -34,6 +35,15 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     }
     if (!canCloseBooking(booking.status)) {
       throw new Error('僅已接受的預約可以結案');
+    }
+
+    const delivery = await loadDeliveryByBookingId(id);
+    if (!delivery) {
+      throw new Error('請先建立交片並上傳至少一張成品，才能結案');
+    }
+    const finalCount = await countFinalPhotos(delivery.id);
+    if (finalCount < 1) {
+      throw new Error('請先上傳至少一張成品照片，才能結案');
     }
 
     const { error: updateError } = await supabase

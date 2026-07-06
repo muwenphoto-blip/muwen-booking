@@ -6,3 +6,10 @@ export function isMissingRelationError(message: string): boolean {
     msg.includes('schema cache')
   );
 }
+
+export function isMissingColumnError(message: string, column?: string): boolean {
+  const msg = message.toLowerCase();
+  if (!msg.includes('does not exist') && !msg.includes('column')) return false;
+  if (column) return msg.includes(column.toLowerCase());
+  return msg.includes('column');
+}

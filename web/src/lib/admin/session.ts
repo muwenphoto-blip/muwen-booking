@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from 'jose';
 
-export type AdminRole = '主' | '副主' | '副';
+export type AdminRole = '主' | '副主' | '副' | '現場';
 
 export type AdminSession = {
   userId: string;
@@ -57,10 +57,30 @@ export async function verifySessionToken(token: string): Promise<AdminSession | 
 
 export function formatRoleLabel(role: AdminRole): string {
   if (role === '主') return '主控';
-  if (role === '副主') return '副主控';
+  if (role === '副主') return '副店長';
+  if (role === '現場') return '門市端';
   return '攝影師';
 }
 
 export function isManagerRole(role: AdminRole): boolean {
   return role === '主' || role === '副主';
+}
+
+export function isStoreStaffRole(role: AdminRole): boolean {
+  return role === '現場';
+}
+
+/** 可查看全部預約列表（含網路與現場） */
+export function canViewAllBookings(role: AdminRole): boolean {
+  return isManagerRole(role) || isStoreStaffRole(role);
+}
+
+/** 可代客建立現場預約 */
+export function canCreateWalkInBooking(role: AdminRole): boolean {
+  return canViewAllBookings(role);
+}
+
+/** 可進入排班表（實際可見範圍由 schedule-access 控制） */
+export function canAccessSchedule(role: AdminRole): boolean {
+  return role === '主' || role === '副主' || role === '副' || isStoreStaffRole(role);
 }

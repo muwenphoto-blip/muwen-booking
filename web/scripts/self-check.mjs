@@ -26,7 +26,13 @@ const requiredFiles = [
   'src/lib/booking/availability.ts',
   'src/lib/admin/schedule-access.ts',
   '../supabase/staff-schedule-workflow.sql',
+  '../supabase/booking-closed-status.sql',
   '../supabase/rls-security-hardening.sql',
+  '../supabase/photo-delivery.sql',
+  '../supabase/booking-case-number.sql',
+  'src/lib/delivery/store.ts',
+  'src/components/admin-delivery-panel.tsx',
+  'src/components/delivery-guest-panel.tsx',
 ];
 
 requiredFiles.forEach((file) => {
@@ -85,7 +91,8 @@ console.log('1. 關閉所有 terminal 裡的 npm run dev');
 console.log('2. cd web && npm run dev:clean');
 console.log('3. 瀏覽器開 http://localhost:3000/admin/schedule');
 console.log('4. 若排休送審失敗，到 Supabase SQL Editor 執行 supabase/staff-schedule-workflow.sql');
-console.log('5. 安全加固請執行 supabase/rls-security-hardening.sql');
+console.log('5. 若結案失敗（bookings_status_check），執行 supabase/booking-closed-status.sql');
+console.log('6. 安全加固請執行 supabase/rls-security-hardening.sql');
 
 const failed = lines.filter((line) => line.startsWith('✗')).length;
 process.exit(failed > 0 ? 1 : 0);

@@ -1,8 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
+import { BookingDocumentsModal } from '@/components/booking-documents-modal';
+import { WalkInBookingModal } from '@/components/walk-in-booking-modal';
 import {
   bookingStatusClass,
   countBookingStats,
@@ -11,6 +14,7 @@ import { formatDate, formatDateWithWeekday } from '@/lib/booking/time';
 
 type BookingRow = {
   id: string;
+  case_number: string;
   booking_date: string;
   booking_time: string;
   staff_name: string;
@@ -24,8 +28,35 @@ type BookingRow = {
   staffInactive?: boolean;
   canTransfer?: boolean;
   canClose?: boolean;
+  closeNeedsFinals?: boolean;
+  canDelivery?: boolean;
+  canSelectPhotos?: boolean;
+  selectionUrl?: string | null;
   canCancel?: boolean;
+  canRemove?: boolean;
 };
+
+function CaseNumberButton({
+  caseNumber,
+  bookingId,
+  onOpen,
+}: {
+  caseNumber: string;
+  bookingId: string;
+  onOpen: (bookingId: string, caseNumber: string) => void;
+}) {
+  if (!caseNumber) return <span className="admin-muted">—</span>;
+  return (
+    <button
+      type="button"
+      className="admin-case-number-btn"
+      onClick={() => onOpen(bookingId, caseNumber)}
+      title="開啟項目表／合約／估價單"
+    >
+      {caseNumber}
+    </button>
+  );
+}
 
 function StaffNameCell({ name, inactive }: { name: string; inactive?: boolean }) {
   if (!inactive) return <>{name}</>;
@@ -50,6 +81,7 @@ function BookingActions({
   onTransfer,
   onClose,
   onCancel,
+  onRemove,
 }: {
   row: BookingRow;
   busyId: string;
@@ -63,74 +95,120 @@ function BookingActions({
   onTransfer: (id: string, newStaff: string) => void;
   onClose: (id: string) => void;
   onCancel: (id: string) => void;
+  onRemove: (id: string) => void;
 }) {
   const transferOptions = staffOptions.filter((name) => name !== row.staff_name);
   const hasActions =
-    row.canRespond || row.canTransfer || row.canClose || row.canCancel;
+    row.canRespond ||
+    row.canTransfer ||
+    row.canClose ||
+    row.closeNeedsFinals ||
+    row.canDelivery ||
+    row.canSelectPhotos ||
+    row.canCancel ||
+    row.canRemove;
   const showDeputyHint = row.staffInactive && !isManager && staffOptions.length > 0;
 
   if (!hasActions && !showDeputyHint) {
     return <span className="admin-muted">—</span>;
   }
 
+  const hasButtonRow =
+    row.canRespond ||
+    row.canTransfer ||
+    row.canClose ||
+    row.canDelivery ||
+    row.canSelectPhotos ||
+    row.canCancel ||
+    row.canRemove;
+
   return (
     <div className="admin-booking-respond">
-      {row.canRespond ? (
-        <>
-          {row.needsStaffAssign ? (
-            <label className="admin-field admin-assign-field">
-              <span>指派攝影師</span>
-              <select
-                value={assignStaff}
-                onChange={(e) => onAssignStaffChange(row.id, e.target.value)}
-              >
-                <option value="">請選擇</option>
-                {staffOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          <div className="admin-actions">
-            <button
-              type="button"
-              className="admin-action accept"
-              disabled={busyId === row.id}
-              onClick={() =>
-                onRespond(row.id, 'accept', row.needsStaffAssign ? assignStaff : undefined)
-              }
-            >
-              接受
-            </button>
-            <button
-              type="button"
-              className="admin-action reject"
-              disabled={busyId === row.id}
-              onClick={() => onRespond(row.id, 'reject')}
-            >
-              拒絕
-            </button>
-          </div>
-        </>
+      {row.needsStaffAssign && row.canRespond ? (
+        <label className="admin-field admin-assign-field">
+          <span>指派攝影師</span>
+          <select
+            value={assignStaff}
+            onChange={(e) => onAssignStaffChange(row.id, e.target.value)}
+          >
+            <option value="">請選擇</option>
+            {staffOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
 
       {row.canTransfer && transferOptions.length ? (
         <label className="admin-field admin-assign-field">
           <span>轉給</span>
-          <div className="admin-transfer-row">
-            <select
-              value={transferStaff}
-              onChange={(e) => onTransferStaffChange(row.id, e.target.value)}
+          <select
+            value={transferStaff}
+            onChange={(e) => onTransferStaffChange(row.id, e.target.value)}
+          >
+            <option value="">請選擇</option>
+            {transferOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {row.closeNeedsFinals ? (
+        <p className="admin-muted delivery-close-hint">須上傳成品後才能結案</p>
+      ) : null}
+
+      {showDeputyHint ? (
+        <p className="admin-staff-warning">該攝影師已停用，請聯繫主控轉單</p>
+      ) : null}
+
+      {hasButtonRow ? (
+        <div className="admin-actions-row">
+          {row.canSelectPhotos && row.selectionUrl ? (
+            <a
+              href={row.selectionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="admin-action accept delivery-link-btn"
             >
-              <option value="">請選擇</option>
-              {transferOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
+              選片
+            </a>
+          ) : null}
+          {row.canDelivery ? (
+            <Link
+              href={`/admin/delivery/${row.id}`}
+              className="admin-action neutral delivery-link-btn"
+            >
+              交成品
+            </Link>
+          ) : null}
+          {row.canRespond ? (
+            <>
+              <button
+                type="button"
+                className="admin-action accept"
+                disabled={busyId === row.id}
+                onClick={() =>
+                  onRespond(row.id, 'accept', row.needsStaffAssign ? assignStaff : undefined)
+                }
+              >
+                接受
+              </button>
+              <button
+                type="button"
+                className="admin-action reject"
+                disabled={busyId === row.id}
+                onClick={() => onRespond(row.id, 'reject')}
+              >
+                拒絕
+              </button>
+            </>
+          ) : null}
+          {row.canTransfer && transferOptions.length ? (
             <button
               type="button"
               className="admin-action neutral"
@@ -139,38 +217,38 @@ function BookingActions({
             >
               轉單
             </button>
-          </div>
-        </label>
-      ) : null}
-
-      {row.canClose ? (
-        <div className="admin-actions">
-          <button
-            type="button"
-            className="admin-action close"
-            disabled={busyId === row.id}
-            onClick={() => onClose(row.id)}
-          >
-            結案
-          </button>
+          ) : null}
+          {row.canClose ? (
+            <button
+              type="button"
+              className="admin-action close"
+              disabled={busyId === row.id}
+              onClick={() => onClose(row.id)}
+            >
+              結案
+            </button>
+          ) : null}
+          {row.canCancel ? (
+            <button
+              type="button"
+              className="admin-action reject"
+              disabled={busyId === row.id}
+              onClick={() => onCancel(row.id)}
+            >
+              取消
+            </button>
+          ) : null}
+          {row.canRemove ? (
+            <button
+              type="button"
+              className="admin-action reject"
+              disabled={busyId === row.id}
+              onClick={() => onRemove(row.id)}
+            >
+              移除
+            </button>
+          ) : null}
         </div>
-      ) : null}
-
-      {row.canCancel ? (
-        <div className="admin-actions">
-          <button
-            type="button"
-            className="admin-action reject"
-            disabled={busyId === row.id}
-            onClick={() => onCancel(row.id)}
-          >
-            取消
-          </button>
-        </div>
-      ) : null}
-
-      {showDeputyHint ? (
-        <p className="admin-staff-warning">該攝影師已停用，請聯繫主控轉單</p>
       ) : null}
     </div>
   );
@@ -189,6 +267,8 @@ function BookingCard({
   onTransfer,
   onClose,
   onCancel,
+  onRemove,
+  onOpenDocuments,
 }: {
   row: BookingRow;
   busyId: string;
@@ -202,18 +282,35 @@ function BookingCard({
   onTransfer: (id: string, newStaff: string) => void;
   onClose: (id: string) => void;
   onCancel: (id: string) => void;
+  onRemove: (id: string) => void;
+  onOpenDocuments: (bookingId: string, caseNumber: string) => void;
 }) {
   const hasActions =
     row.canRespond ||
     row.canTransfer ||
     row.canClose ||
+    row.closeNeedsFinals ||
+    row.canDelivery ||
+    row.canSelectPhotos ||
     row.canCancel ||
+    row.canRemove ||
     (row.staffInactive && !isManager && staffOptions.length > 0);
 
   return (
     <article className="admin-booking-card">
       <div className="admin-booking-card-head">
-        <strong className="admin-booking-name">{row.customer_name || '（未填姓名）'}</strong>
+        <div>
+          <strong className="admin-booking-name">{row.customer_name || '（未填姓名）'}</strong>
+          {row.case_number ? (
+            <p className="admin-booking-case">
+              <CaseNumberButton
+                caseNumber={row.case_number}
+                bookingId={row.id}
+                onOpen={onOpenDocuments}
+              />
+            </p>
+          ) : null}
+        </div>
         <span className={`admin-status-badge ${bookingStatusClass(row.status)}`}>
           {row.status}
         </span>
@@ -263,6 +360,7 @@ function BookingCard({
             onTransfer={onTransfer}
             onClose={onClose}
             onCancel={onCancel}
+            onRemove={onRemove}
           />
         </div>
       ) : null}
@@ -281,6 +379,22 @@ export function AdminDashboardPanel() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState('');
+  const [documentsBookingId, setDocumentsBookingId] = useState('');
+  const [documentsCaseNumber, setDocumentsCaseNumber] = useState('');
+  const [walkInOpen, setWalkInOpen] = useState(false);
+  const [photographerName, setPhotographerName] = useState('');
+  const [canCreateWalkIn, setCanCreateWalkIn] = useState(false);
+  const [canAssignWalkInStaff, setCanAssignWalkInStaff] = useState(false);
+
+  function openDocuments(bookingId: string, caseNumber: string) {
+    setDocumentsBookingId(bookingId);
+    setDocumentsCaseNumber(caseNumber);
+  }
+
+  function closeDocuments() {
+    setDocumentsBookingId('');
+    setDocumentsCaseNumber('');
+  }
 
   const today = useMemo(() => formatDate(new Date()), []);
   const stats = useMemo(() => countBookingStats(bookings, today), [bookings, today]);
@@ -301,6 +415,9 @@ export function AdminDashboardPanel() {
     setBookings(bookingsData.bookings ?? []);
     setStaffOptions(bookingsData.staffOptions ?? []);
     setIsManager(Boolean(bookingsData.isManager));
+    setPhotographerName(bookingsData.photographerName ?? '');
+    setCanCreateWalkIn(Boolean(bookingsData.canCreateWalkIn));
+    setCanAssignWalkInStaff(Boolean(bookingsData.isManager || bookingsData.isStoreStaff));
     if (!options?.silent) {
       setError('');
     }
@@ -443,6 +560,26 @@ export function AdminDashboardPanel() {
     }
   }
 
+  async function removeBooking(id: string) {
+    const ok = window.confirm('確定要永久移除這筆預約？此動作無法復原。');
+    if (!ok) return;
+
+    setError('');
+    setMessage('');
+    setBusyId(id);
+    try {
+      const res = await fetch(`/api/admin/bookings/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '移除失敗');
+      setMessage(data.message || '已移除');
+      await loadData({ silent: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '移除失敗');
+    } finally {
+      setBusyId('');
+    }
+  }
+
   if (loading) {
     return (
       <AdminShell>
@@ -457,6 +594,14 @@ export function AdminDashboardPanel() {
     >
       {error ? <p className="admin-error">{error}</p> : null}
       {message ? <p className="admin-success">{message}</p> : null}
+
+      {canCreateWalkIn ? (
+        <div className="admin-walk-in-bar">
+          <button type="button" className="admin-button" onClick={() => setWalkInOpen(true)}>
+            ＋ 新增現場預約
+          </button>
+        </div>
+      ) : null}
 
       <div className="admin-stats">
         <div className="admin-stat">
@@ -493,6 +638,8 @@ export function AdminDashboardPanel() {
                   onTransfer={transferBooking}
                   onClose={closeBooking}
                   onCancel={cancelBooking}
+                  onRemove={removeBooking}
+                  onOpenDocuments={openDocuments}
                 />
               ))}
             </div>
@@ -500,6 +647,7 @@ export function AdminDashboardPanel() {
               <table className="admin-table">
                 <thead>
                   <tr>
+                    <th>案號</th>
                     <th>日期</th>
                     <th>時段</th>
                     <th>服務</th>
@@ -513,6 +661,13 @@ export function AdminDashboardPanel() {
                 <tbody>
                   {bookings.map((row) => (
                     <tr key={row.id}>
+                      <td>
+                        <CaseNumberButton
+                          caseNumber={row.case_number}
+                          bookingId={row.id}
+                          onOpen={openDocuments}
+                        />
+                      </td>
                       <td>{formatDateWithWeekday(row.booking_date)}</td>
                       <td>{row.booking_time}</td>
                       <td>{row.service}</td>
@@ -540,6 +695,7 @@ export function AdminDashboardPanel() {
                           onTransfer={transferBooking}
                           onClose={closeBooking}
                           onCancel={cancelBooking}
+                          onRemove={removeBooking}
                         />
                       </td>
                     </tr>
@@ -552,6 +708,26 @@ export function AdminDashboardPanel() {
           <p className="admin-muted">目前沒有預約。</p>
         )}
       </div>
+
+      <BookingDocumentsModal
+        bookingId={documentsBookingId}
+        caseNumber={documentsCaseNumber}
+        open={Boolean(documentsBookingId)}
+        onClose={closeDocuments}
+      />
+
+      <WalkInBookingModal
+        open={walkInOpen}
+        canAssignStaff={canAssignWalkInStaff}
+        photographerName={photographerName}
+        onClose={() => setWalkInOpen(false)}
+        onSuccess={(booking) => {
+          setMessage(
+            `已建立門市預約${booking.case_number ? `（案號 ${booking.case_number}）` : ''}`,
+          );
+          loadData({ silent: true }).catch(() => {});
+        }}
+      />
     </AdminShell>
   );
 }

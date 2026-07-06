@@ -42,6 +42,7 @@ export function AdminShell({ children, onRefresh }: AdminShellProps) {
   const isManager = session?.role === '主' || session?.role === '副主';
   const isMaster = session?.role === '主';
   const isDeputy = session?.role === '副';
+  const isStoreStaff = session?.role === '現場';
 
   function navClass(active: boolean) {
     return [
@@ -56,14 +57,16 @@ export function AdminShell({ children, onRefresh }: AdminShellProps) {
     <div className="admin-shell">
       <header className="admin-topbar">
         <div>
-          <h1>沐紋映像｜預約後台</h1>
+          <h1>{isStoreStaff ? '沐紋映像｜門市後台' : '沐紋映像｜預約後台'}</h1>
           {session ? (
             <p className="admin-muted">
               {session.role === '副'
                 ? `${session.photographerName || session.account}「${session.account}」`
-                : `${session.roleLabel}「${session.account}」${
-                    session.photographerName ? `｜${session.photographerName}` : ''
-                  }`}
+                : session.role === '現場'
+                  ? `${session.roleLabel}「${session.account}」`
+                  : `${session.roleLabel}「${session.account}」${
+                      session.photographerName ? `｜${session.photographerName}` : ''
+                    }`}
             </p>
           ) : null}
         </div>
@@ -92,6 +95,11 @@ export function AdminShell({ children, onRefresh }: AdminShellProps) {
               我的排班
             </Link>
           </>
+        ) : null}
+        {isStoreStaff ? (
+          <Link href="/admin/schedule" className={navClass(pathname === '/admin/schedule')}>
+            班表查詢
+          </Link>
         ) : null}
         {isManager ? (
           <>

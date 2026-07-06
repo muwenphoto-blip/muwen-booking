@@ -18,7 +18,7 @@ export function staffRequiresMasterApproval(
 }
 
 export function pendingApproverLabel(requiresMasterApproval: boolean): string {
-  return requiresMasterApproval ? '主控' : '主控／副主控';
+  return requiresMasterApproval ? '主控' : '主控／副店長';
 }
 
 export function canApproveStaffSchedule(
@@ -47,6 +47,9 @@ export function canViewStaffSchedule(
   coMasterStaffNames: ReadonlySet<string>,
 ): boolean {
   if (actor.role === '主') return true;
+  if (actor.role === '現場') {
+    return !masterStaffNames.has(staffName);
+  }
   if (actor.role === '副') return isOwnStaffSchedule(actor, staffName);
   if (isOwnStaffSchedule(actor, staffName)) return true;
   if (masterStaffNames.has(staffName)) return false;
@@ -60,6 +63,7 @@ export function canEditStaffSchedule(
   masterStaffNames: ReadonlySet<string>,
   coMasterStaffNames: ReadonlySet<string>,
 ): boolean {
+  if (actor.role === '現場') return false;
   return canViewStaffSchedule(actor, staffName, masterStaffNames, coMasterStaffNames);
 }
 
@@ -70,11 +74,14 @@ export function assertScheduleView(
   coMasterStaffNames: ReadonlySet<string>,
 ) {
   if (canViewStaffSchedule(actor, staffName, masterStaffNames, coMasterStaffNames)) return;
+  if (actor.role === '現場' && masterStaffNames.has(staffName)) {
+    throw new Error('現場服務人員無法查看主控的排班表');
+  }
   if (actor.role === '副主' && masterStaffNames.has(staffName)) {
-    throw new Error('副主控無法查看主控的排班表');
+    throw new Error('副店長無法查看主控的排班表');
   }
   if (actor.role === '副主' && coMasterStaffNames.has(staffName)) {
-    throw new Error('副主控無法查看其他副主控的排班表');
+    throw new Error('副店長無法查看其他副店長的排班表');
   }
   throw new Error('您只能查看自己的排班表');
 }
@@ -85,6 +92,7 @@ export function mustSubmitForApproval(
   staffName: string,
 ): boolean {
   if (actor.role === '主') return false;
+  if (actor.role === '現場') return false;
   if (actor.role === '副') return true;
   return isOwnStaffSchedule(actor, staffName);
 }

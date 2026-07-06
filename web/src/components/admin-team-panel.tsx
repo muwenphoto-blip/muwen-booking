@@ -4,11 +4,24 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
+import { AddMemberModal } from '@/components/add-member-modal';
+import { FormField } from '@/components/form-field';
 import { StaffProfileModal } from '@/components/staff-profile-modal';
+import { clearFieldError, focusFirstInvalid, runValidation, type ValidationRule } from '@/lib/form-validation';
+
+type StoreAccount = {
+  id: string;
+  account: string;
+  active: boolean;
+  roleLabel: string;
+  canManage: boolean;
+  canDelete: boolean;
+};
 
 type TeamMember = {
   staffId: string;
   name: string;
+  casePrefix: string;
   staffActive: boolean;
   availabilityLabel: string;
   hasAccount: boolean;
@@ -46,6 +59,7 @@ type EditForm = {
   staffId: string;
   userId?: string;
   name: string;
+  casePrefix: string;
   accountName: string;
   hasAccount: boolean;
   isMaster: boolean;
@@ -56,12 +70,13 @@ type EditForm = {
 
 const ROLE_OPTIONS = [
   { value: 'deputy', label: '攝影師' },
-  { value: 'comaster', label: '副主控' },
+  { value: 'comaster', label: '副店長' },
 ] as const;
 
 function roleBadgeClass(role: string | null, hasAccount: boolean) {
   if (role === '主') return 'admin-badge master';
   if (role === '副主') return 'admin-badge comaster';
+  if (role === '現場') return 'admin-badge store';
   if (hasAccount) return 'admin-badge deputy';
   return 'admin-badge inactive';
 }
@@ -69,6 +84,7 @@ function roleBadgeClass(role: string | null, hasAccount: boolean) {
 export function AdminTeamPanel() {
   const router = useRouter();
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [storeAccounts, setStoreAccounts] = useState<StoreAccount[]>([]);
   const [canAssignCoMaster, setCanAssignCoMaster] = useState(false);
   const [canViewStaffProfile, setCanViewStaffProfile] = useState(false);
   const [profileModal, setProfileModal] = useState<{ staffId: string; name: string } | null>(null);
@@ -76,15 +92,14 @@ export function AdminTeamPanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [editFieldErrors, setEditFieldErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<EditForm | null>(null);
-  const [newName, setNewName] = useState('');
-  const [newAccount, setNewAccount] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [newRole, setNewRole] = useState<'deputy' | 'comaster'>('deputy');
   const [createAccount, setCreateAccount] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [sessions, setSessions] = useState<SessionEntry[]>([]);
   const [setupHints, setSetupHints] = useState<string[]>([]);
+  const [sessionsTableMissing, setSessionsTableMissing] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   const [logQuery, setLogQuery] = useState('');
 
@@ -97,11 +112,13 @@ export function AdminTeamPanel() {
     }
     if (!res.ok) throw new Error(data.error || '無法載入團隊資料');
     setMembers(data.members ?? []);
+    setStoreAccounts(data.storeAccounts ?? []);
     setCanAssignCoMaster(Boolean(data.canAssignCoMaster));
     setCanViewStaffProfile(Boolean(data.canViewStaffProfile));
     setLogs(data.logs ?? []);
     setSessions(data.sessions ?? []);
     setSetupHints(Array.isArray(data.setupHints) ? data.setupHints : []);
+    setSessionsTableMissing(Boolean(data.sessionsTableMissing));
   }, [router]);
 
   const searchLogs = useCallback(async (query: string) => {
@@ -124,6 +141,7 @@ export function AdminTeamPanel() {
       staffId: member.staffId,
       userId: member.userId,
       name: member.name,
+      casePrefix: member.casePrefix || '',
       accountName: member.account || '',
       hasAccount: member.hasAccount,
       isMaster: member.isMaster,
@@ -133,24 +151,91 @@ export function AdminTeamPanel() {
     });
     setError('');
     setMessage('');
+    setEditFieldErrors({});
+  }
+
+  function touchEditField(fieldId: string) {
+    setEditFieldErrors((prev) => clearFieldError(prev, fieldId));
+  }
+
+  function buildEditRules(form: EditForm): ValidationRule[] {
+    const rules: ValidationRule[] = [
+      { fieldId: 'edit-name', label: '攝影師姓名', value: form.name, required: true, minLength: 2 },
+      {
+        fieldId: 'edit-case-prefix',
+        label: '案號前綴',
+        value: form.casePrefix,
+        required: true,
+        pattern: /^[A-Z]{2}$/,
+        patternMessage: '案號前綴需為 2 個英文字',
+      },
+    ];
+
+    if (form.hasAccount) {
+      rules.push({
+        fieldId: 'edit-account',
+        label: '登入帳號',
+        value: form.accountName,
+        required: true,
+        minLength: 2,
+      });
+    } else if (createAccount) {
+      rules.push(
+        {
+          fieldId: 'edit-account',
+          label: '登入帳號',
+          value: form.accountName,
+          required: true,
+          minLength: 2,
+        },
+        {
+          fieldId: 'edit-password',
+          label: '密碼',
+          value: form.password,
+          required: true,
+          minLength: 8,
+        },
+      );
+    }
+
+    return rules;
   }
 
   async function saveEdit(event: React.FormEvent) {
     event.preventDefault();
     if (!editing) return;
+
+    const errors = runValidation(buildEditRules(editing));
+    setEditFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      focusFirstInvalid(errors);
+      return;
+    }
     setSubmitting(true);
     setError('');
     setMessage('');
     try {
-      const nameChanged = editing.name.trim() !== members.find((m) => m.staffId === editing.staffId)?.name;
-      if (nameChanged) {
+      const current = members.find((m) => m.staffId === editing.staffId);
+      const nameChanged = editing.name.trim() !== current?.name;
+      const casePrefixChanged =
+        editing.casePrefix.trim().toUpperCase() !== (current?.casePrefix || '').toUpperCase();
+      const activeChanged =
+        !editing.hasAccount && current ? editing.active !== current.staffActive : false;
+
+      const staffPatch: Record<string, unknown> = {};
+      if (nameChanged) staffPatch.name = editing.name.trim();
+      if (casePrefixChanged) staffPatch.casePrefix = editing.casePrefix.trim().toUpperCase();
+      if (activeChanged) staffPatch.active = editing.active;
+
+      if (Object.keys(staffPatch).length) {
         const res = await fetch(`/api/admin/team/staff/${editing.staffId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: editing.name.trim() }),
+          body: JSON.stringify(staffPatch),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '修改姓名失敗');
+        if (!res.ok) throw new Error(data.error || '修改攝影師失敗');
+        setMessage(data.message || '已更新');
       }
 
       if (editing.hasAccount && editing.userId) {
@@ -168,23 +253,6 @@ export function AdminTeamPanel() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '修改帳號失敗');
         setMessage(data.message || '已更新');
-      } else if (!editing.hasAccount) {
-        const current = members.find((m) => m.staffId === editing.staffId);
-        const activeChanged = current && editing.active !== current.staffActive;
-        if (activeChanged) {
-          const res = await fetch(`/api/admin/team/staff/${editing.staffId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ active: editing.active }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || '修改服務狀態失敗');
-          setMessage(data.message || '已更新服務狀態');
-        } else if (nameChanged) {
-          setMessage('已更新姓名');
-        } else {
-          setMessage('沒有需要更新的項目');
-        }
       } else if (createAccount && editing.accountName && editing.password) {
         const res = await fetch('/api/admin/team/users', {
           method: 'POST',
@@ -199,9 +267,7 @@ export function AdminTeamPanel() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '建立帳號失敗');
         setMessage(data.message || '已建立登入帳號');
-      } else if (nameChanged) {
-        setMessage('已更新姓名');
-      } else {
+      } else if (!Object.keys(staffPatch).length) {
         setMessage('沒有需要更新的項目');
       }
 
@@ -272,47 +338,82 @@ export function AdminTeamPanel() {
     }
   }
 
-  async function addMember(event: React.FormEvent) {
-    event.preventDefault();
+  async function handleAddMember(payload: {
+    role: 'comaster' | 'deputy' | 'store';
+    name: string;
+    casePrefix: string;
+    accountName: string;
+    password: string;
+    createAccount: boolean;
+  }) {
     setSubmitting(true);
     setError('');
     setMessage('');
     try {
-      const name = newName.trim();
-      const account = newAccount.trim();
-      const resStaff = await fetch('/api/admin/team/staff', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
-      const staffData = await resStaff.json();
-      if (!resStaff.ok) throw new Error(staffData.error || '新增失敗');
-
-      if (account) {
-        const resUser = await fetch('/api/admin/team/users', {
+      if (payload.role === 'store') {
+        const res = await fetch('/api/admin/team/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            photographerName: name,
-            accountName: account,
-            password: newPassword,
-            role: newRole,
+            role: 'store',
+            accountName: payload.accountName,
+            password: payload.password,
           }),
         });
-        const userData = await resUser.json();
-        if (!resUser.ok) throw new Error(userData.error || '帳號建立失敗');
-        setMessage(userData.message || '已新增成員與登入帳號');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '新增失敗');
+        setMessage(data.message || '已新增門市帳號');
       } else {
-        setMessage(staffData.message || '已新增攝影師（僅預約選項）');
+        const resStaff = await fetch('/api/admin/team/staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: payload.name, casePrefix: payload.casePrefix }),
+        });
+        const staffData = await resStaff.json();
+        if (!resStaff.ok) throw new Error(staffData.error || '新增失敗');
+
+        if (payload.createAccount) {
+          const resUser = await fetch('/api/admin/team/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              photographerName: payload.name,
+              accountName: payload.accountName,
+              password: payload.password,
+              role: payload.role,
+            }),
+          });
+          const userData = await resUser.json();
+          if (!resUser.ok) throw new Error(userData.error || '帳號建立失敗');
+          setMessage(userData.message || '已新增成員與登入帳號');
+        } else {
+          setMessage(staffData.message || '已新增攝影師（僅預約選項）');
+        }
       }
 
-      setNewName('');
-      setNewAccount('');
-      setNewPassword('');
-      setNewRole('deputy');
+      setAddMemberOpen(false);
       await loadTeam();
     } catch (err) {
       setError(err instanceof Error ? err.message : '新增失敗');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function deleteStoreAccount(account: StoreAccount) {
+    const ok = window.confirm(`確定刪除門市帳號「${account.account}」？`);
+    if (!ok) return;
+    setSubmitting(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await fetch(`/api/admin/team/users/${account.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '刪除失敗');
+      setMessage(data.message || '已刪除');
+      await loadTeam();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '刪除失敗');
     } finally {
       setSubmitting(false);
     }
@@ -365,12 +466,20 @@ export function AdminTeamPanel() {
           <div>
             <h2>團隊成員</h2>
             <p className="admin-muted">
-              同一位成員：預約用的「攝影師姓名」＋可選的「後台登入帳號」（跟舊版 GAS 一樣）
+              攝影師、管理者與門市端帳號；點「新增成員」開啟完整設定
             </p>
           </div>
+          <button
+            type="button"
+            className="admin-button"
+            disabled={submitting}
+            onClick={() => setAddMemberOpen(true)}
+          >
+            ＋ 新增成員
+          </button>
         </div>
 
-        {members.length ? (
+        {members.length || storeAccounts.length ? (
           <>
             <div className="admin-member-cards">
               {members.map((member) => (
@@ -382,6 +491,10 @@ export function AdminTeamPanel() {
                     </span>
                   </div>
                   <dl className="admin-member-meta">
+                    <div>
+                      <dt>案號前綴</dt>
+                      <dd>{member.casePrefix || '—'}</dd>
+                    </div>
                     <div>
                       <dt>登入帳號</dt>
                       <dd>{member.hasAccount ? member.account : '—'}</dd>
@@ -454,12 +567,55 @@ export function AdminTeamPanel() {
                   </div>
                 </article>
               ))}
+              {storeAccounts.map((account) => (
+                <article key={account.id} className="admin-member-card admin-member-card--store">
+                  <div className="admin-member-card-head">
+                    <strong>{account.account}</strong>
+                    <span className="admin-badge store">{account.roleLabel}</span>
+                  </div>
+                  <dl className="admin-member-meta">
+                    <div>
+                      <dt>類型</dt>
+                      <dd>門市端帳號</dd>
+                    </div>
+                    <div>
+                      <dt>登入帳號</dt>
+                      <dd>{account.account}</dd>
+                    </div>
+                    <div>
+                      <dt>權限</dt>
+                      <dd>預約列表、門市登記、班表查詢</dd>
+                    </div>
+                    <div>
+                      <dt>狀態</dt>
+                      <dd>
+                        <span className={account.active ? 'admin-badge active' : 'admin-badge inactive'}>
+                          {account.active ? '啟用' : '停用'}
+                        </span>
+                      </dd>
+                    </div>
+                  </dl>
+                  <div className="admin-actions admin-member-card-actions">
+                    {account.canDelete ? (
+                      <button
+                        type="button"
+                        className="admin-action reject"
+                        disabled={submitting}
+                        onClick={() => deleteStoreAccount(account)}
+                      >
+                        刪除帳號
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              ))}
             </div>
             <div className="admin-table-wrap admin-member-table">
               <table className="admin-table">
                 <thead>
                   <tr>
                     <th>攝影師</th>
+                    <th>案號前綴</th>
                     <th>管理職級</th>
                     <th>登入帳號</th>
                     <th>排班</th>
@@ -471,6 +627,9 @@ export function AdminTeamPanel() {
                   {members.map((member) => (
                     <tr key={member.staffId}>
                       <td>{member.name}</td>
+                      <td>
+                        <span className="admin-case-number">{member.casePrefix || '—'}</span>
+                      </td>
                       <td>
                         <span className={roleBadgeClass(member.role, member.hasAccount)}>
                           {member.roleLabel}
@@ -542,36 +701,104 @@ export function AdminTeamPanel() {
                       </td>
                     </tr>
                   ))}
+                  {storeAccounts.map((account) => (
+                    <tr key={account.id}>
+                      <td>{account.account}</td>
+                      <td>—</td>
+                      <td>
+                        <span className="admin-badge store">{account.roleLabel}</span>
+                      </td>
+                      <td>{account.account}</td>
+                      <td>
+                        <span className="admin-muted">門市端</span>
+                      </td>
+                      <td>
+                        <span className={account.active ? 'admin-badge active' : 'admin-badge inactive'}>
+                          {account.active ? '啟用' : '停用'}
+                        </span>
+                      </td>
+                      <td>
+                        {account.canDelete ? (
+                          <button
+                            type="button"
+                            className="admin-action reject"
+                            disabled={submitting}
+                            onClick={() => deleteStoreAccount(account)}
+                          >
+                            刪除帳號
+                          </button>
+                        ) : (
+                          <span className="admin-muted">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
           </>
         ) : (
-          <p className="admin-muted">尚無成員，請在下方新增。</p>
+          <p className="admin-muted">尚無成員，請點「新增成員」。</p>
         )}
 
         {editing ? (
-          <form className="admin-form admin-form-box admin-edit-box" onSubmit={saveEdit}>
+          <form className="admin-form admin-form-box admin-edit-box" onSubmit={saveEdit} noValidate>
             <h3>編輯「{editing.name}」</h3>
+            <p className="admin-muted">
+              標示 <abbr className="admin-field-required" title="必填">*</abbr> 為必填；未填寫無法儲存
+            </p>
             <div className="admin-grid-2">
-              <label className="admin-field">
-                <span>攝影師姓名</span>
+              <FormField
+                fieldId="edit-name"
+                label="攝影師姓名"
+                required
+                hint="顯示於預約與案號"
+                error={editFieldErrors['edit-name']}
+              >
                 <input
                   value={editing.name}
-                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
-                  required
+                  onChange={(e) => {
+                    touchEditField('edit-name');
+                    setEditing({ ...editing, name: e.target.value });
+                  }}
                 />
-              </label>
+              </FormField>
+              <FormField
+                fieldId="edit-case-prefix"
+                label="案號前綴（2 英文字）"
+                required
+                hint="用於案號編碼，例如 XE"
+                error={editFieldErrors['edit-case-prefix']}
+              >
+                <input
+                  value={editing.casePrefix}
+                  onChange={(e) => {
+                    touchEditField('edit-case-prefix');
+                    setEditing({
+                      ...editing,
+                      casePrefix: e.target.value.toUpperCase().slice(0, 2),
+                    });
+                  }}
+                  placeholder="例如 XE"
+                  maxLength={2}
+                />
+              </FormField>
               {editing.hasAccount ? (
-                <label className="admin-field">
-                  <span>登入帳號</span>
+                <FormField
+                  fieldId="edit-account"
+                  label="登入帳號"
+                  required
+                  error={editFieldErrors['edit-account']}
+                >
                   <input
                     value={editing.accountName}
-                    onChange={(e) => setEditing({ ...editing, accountName: e.target.value })}
+                    onChange={(e) => {
+                      touchEditField('edit-account');
+                      setEditing({ ...editing, accountName: e.target.value });
+                    }}
                     readOnly={editing.isMaster && !canAssignCoMaster}
-                    required
                   />
-                </label>
+                </FormField>
               ) : (
                 <div className="admin-field admin-field-check">
                   <span>後台登入</span>
@@ -590,18 +817,29 @@ export function AdminTeamPanel() {
             {(!editing.hasAccount && createAccount) || editing.hasAccount ? (
               <div className="admin-grid-2">
                 {!editing.hasAccount && createAccount ? (
-                  <label className="admin-field">
-                    <span>登入帳號</span>
+                  <FormField
+                    fieldId="edit-account"
+                    label="登入帳號"
+                    required
+                    hint="至少 2 字"
+                    error={editFieldErrors['edit-account']}
+                  >
                     <input
                       value={editing.accountName}
-                      onChange={(e) => setEditing({ ...editing, accountName: e.target.value })}
+                      onChange={(e) => {
+                        touchEditField('edit-account');
+                        setEditing({ ...editing, accountName: e.target.value });
+                      }}
                       placeholder="至少 2 字"
-                      required
                     />
-                  </label>
+                  </FormField>
                 ) : null}
-                <label className="admin-field">
-                  <span>管理職級</span>
+                <FormField
+                  fieldId="edit-role"
+                  label="管理職級"
+                  required={editing.hasAccount || createAccount}
+                  hint="副店長可管理團隊；攝影師為一般職員"
+                >
                   {editing.isMaster ? (
                     <input value="主控" readOnly />
                   ) : (
@@ -621,17 +859,25 @@ export function AdminTeamPanel() {
                       )}
                     </select>
                   )}
-                </label>
-                <label className="admin-field">
-                  <span>{editing.hasAccount ? '新密碼（選填）' : '密碼'}</span>
+                </FormField>
+                <FormField
+                  fieldId="edit-password"
+                  label={editing.hasAccount ? '新密碼' : '密碼'}
+                  required={!editing.hasAccount && createAccount}
+                  optional={editing.hasAccount}
+                  hint={editing.hasAccount ? '留空則不變更' : '至少 8 字'}
+                  error={editFieldErrors['edit-password']}
+                >
                   <input
                     type="password"
                     value={editing.password}
-                    onChange={(e) => setEditing({ ...editing, password: e.target.value })}
+                    onChange={(e) => {
+                      touchEditField('edit-password');
+                      setEditing({ ...editing, password: e.target.value });
+                    }}
                     placeholder={editing.hasAccount ? '留空則不變更' : '至少 8 字'}
-                    required={!editing.hasAccount && createAccount}
                   />
-                </label>
+                </FormField>
                 {editing.hasAccount ? (
                   <label className="admin-field admin-field-check">
                     <span>帳號狀態</span>
@@ -689,65 +935,23 @@ export function AdminTeamPanel() {
             </div>
           </form>
         ) : null}
-
-        <form className="admin-form admin-form-box" onSubmit={addMember}>
-          <h3>新增成員</h3>
-          <div className="admin-grid-2">
-            <label className="admin-field">
-              <span>攝影師姓名</span>
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="必填"
-                required
-              />
-            </label>
-            <label className="admin-field">
-              <span>登入帳號（選填）</span>
-              <input
-                value={newAccount}
-                onChange={(e) => setNewAccount(e.target.value)}
-                placeholder="留空＝僅加入預約選項"
-              />
-            </label>
-          </div>
-          {newAccount ? (
-            <div className="admin-grid-2">
-              <label className="admin-field">
-                <span>密碼</span>
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="至少 8 字"
-                  required
-                />
-              </label>
-              <label className="admin-field">
-                <span>管理職級</span>
-                <select
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as 'deputy' | 'comaster')}
-                >
-                  {ROLE_OPTIONS.map((option) =>
-                    option.value === 'comaster' && !canAssignCoMaster ? null : (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ),
-                  )}
-                </select>
-              </label>
-            </div>
-          ) : null}
-          <button type="submit" className="admin-button" disabled={submitting}>
-            新增
-          </button>
-        </form>
       </div>
+
+      <AddMemberModal
+        open={addMemberOpen}
+        canAssignCoMaster={canAssignCoMaster}
+        submitting={submitting}
+        onClose={() => setAddMemberOpen(false)}
+        onSubmit={handleAddMember}
+      />
 
       <div className="admin-card">
         <h2>目前登入中</h2>
+        {sessionsTableMissing ? (
+          <p className="admin-muted admin-inline-setup-hint">
+            進階功能：在 Supabase 執行 <code>supabase/admin-sessions.sql</code> 後可顯示即時登入狀態
+          </p>
+        ) : null}
         {sessions.length ? (
           <div className="admin-session-list">
             {sessions.map((session) => (

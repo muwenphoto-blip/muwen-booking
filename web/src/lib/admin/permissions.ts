@@ -9,6 +9,9 @@ export function normalizeAdminRole(value: string): AdminRole {
   if (text === '副主' || text === '副主控' || text === 'comaster') {
     return '副主';
   }
+  if (text === '現場' || text === '現場服務人員' || text === 'store' || text === 'frontdesk') {
+    return '現場';
+  }
   if (text === '副' || text === '攝影師' || text === 'deputy' || text === 'photographer') {
     return '副';
   }
@@ -33,7 +36,10 @@ export function assertRoleAssignable(actorRole: AdminRole, targetRoleInput: stri
     throw new Error('後台無法新增或指定主控');
   }
   if (targetRole === '副主' && actorRole !== '主') {
-    throw new Error('僅主控可新增或指定副主控');
+    throw new Error('僅主控可新增或指定副店長');
+  }
+  if (targetRole === '現場' && !isManagerRole(actorRole)) {
+    throw new Error('僅管理員可新增現場服務人員');
   }
   return targetRole;
 }
@@ -65,7 +71,7 @@ export function assertCanManageAdminUser(
     if (actor.id === target.id) {
       return;
     }
-    throw new Error('僅主控可管理副主控帳號');
+    throw new Error('僅主控可管理副店長帳號');
   }
   if (actor.id === target.id && options?.blockMaster) {
     throw new Error('無法刪除目前登入的帳號，請先登出後由其他管理員操作');

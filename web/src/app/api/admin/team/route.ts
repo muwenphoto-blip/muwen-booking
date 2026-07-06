@@ -20,6 +20,7 @@ type StaffRow = {
   name: string;
   active: boolean;
   availability_schedule: string;
+  case_prefix: string | null;
 };
 
 type UserRow = {
@@ -60,6 +61,7 @@ function buildTeamMembers(
     return {
       staffId: row.id,
       name: row.name,
+      casePrefix: row.case_prefix ? String(row.case_prefix).toUpperCase() : '',
       staffActive: row.active,
       availabilityLabel: String(row.availability_schedule || '').trim()
         ? '已設定排班'
@@ -96,7 +98,7 @@ export async function GET() {
     const supabase = createAdminSupabaseClient();
     const [{ data: staff, error: staffError }, { data: users, error: usersError }] =
       await Promise.all([
-        supabase.from('staff').select('id, name, active, availability_schedule').order('name'),
+        supabase.from('staff').select('id, name, active, availability_schedule, case_prefix').order('name'),
         supabase
           .from('admin_users')
           .select('id, account_name, active, role, photographer_name')
@@ -131,6 +133,15 @@ export async function GET() {
       (staff ?? []).map((row) => row.name),
     );
 
+    const missingPrefixStaff = (staff ?? [])
+      .filter((row) => !String(row.case_prefix || '').trim())
+      .map((row) => row.name);
+    if (missingPrefixStaff.length) {
+      setupHints.push(
+        `以下攝影師尚未設定案號前綴：${missingPrefixStaff.join('、')}。請在團隊管理編輯設定，新預約才能產生案號。`,
+      );
+    }
+
     const logQuery = '';
     let logs: Awaited<ReturnType<typeof readAdminLogs>> = [];
     try {
@@ -145,11 +156,7 @@ export async function GET() {
     }
 
     const sessionResult = await listActiveAdminSessions(supabase);
-    if (sessionResult.tableMissing) {
-      setupHints.push(
-        '尚未建立 admin_sessions 資料表，「目前登入中」需先在 Supabase 執行 supabase/admin-sessions.sql',
-      );
-    }
+
     const sessions = sessionResult.items.map((item) => ({
       ...item,
       lastSeenLabel: formatSessionTime(item.lastSeen),
@@ -159,7 +166,22 @@ export async function GET() {
       canAssignCoMaster: session.role === '主',
       canViewStaffProfile: session.role === '主',
       setupHints,
+      sessionsTableMissing: sessionResult.tableMissing,
       members: buildTeamMembers(staff ?? [], users ?? [], session, profileFlags, blockingCounts),
+      storeAccounts: (users ?? [])
+        .filter((row) => normalizeAdminRole(row.role) === '現場')
+        .map((row) => {
+          const role: AdminRole = '現場';
+          const target = { id: row.id, role, active: row.active };
+          return {
+            id: row.id,
+            account: row.account_name,
+            active: row.active,
+            roleLabel: formatRoleLabel(role),
+            canManage: canManageAdminUser({ id: session.userId, role: session.role }, target),
+            canDelete: canDeleteAdminUser({ id: session.userId, role: session.role }, target),
+          };
+        }),
       staff: (staff ?? []).map((row) => ({
         id: row.id,
         name: row.name,

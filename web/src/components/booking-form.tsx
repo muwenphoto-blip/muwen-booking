@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { BookingConfig, BookingSlot } from '@/lib/booking/types';
-import { PHONE_COUNTRIES } from '@/lib/booking/phone-countries';
+import {
+  DEFAULT_PHONE_COUNTRY_ID,
+  getPhoneCountryRule,
+  PHONE_COUNTRIES,
+} from '@/lib/booking/phone-countries';
+import { FormField } from '@/components/form-field';
+import { clearFieldError, focusFirstInvalid, runValidation, type ValidationRule } from '@/lib/form-validation';
 import {
   addDays,
   findNextOpenDate,
@@ -26,13 +32,14 @@ export function BookingForm() {
   const [gender, setGender] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [phoneCountry, setPhoneCountry] = useState('+886');
+  const [phoneCountryId, setPhoneCountryId] = useState(DEFAULT_PHONE_COUNTRY_ID);
   const [email, setEmail] = useState('');
   const [note, setNote] = useState('');
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'error' | 'success' | ''>('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     fetch('/api/booking/config')
@@ -130,18 +137,50 @@ export function BookingForm() {
     return selectedService.name;
   }, [selectedService, serviceOption]);
 
+  const phoneCountryRule = useMemo(
+    () => getPhoneCountryRule(phoneCountryId),
+    [phoneCountryId],
+  );
+
+  function touchField(fieldId: string) {
+    setFieldErrors((prev) => clearFieldError(prev, fieldId));
+  }
+
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setMessage('');
     setMessageType('');
 
-    if (!selectedTime) {
-      setMessage('請先選擇預約時段');
-      setMessageType('error');
-      return;
+    const rules: ValidationRule[] = [
+      { fieldId: 'booking-date', label: '預約日期', value: date, required: true },
+      { fieldId: 'booking-staff', label: '服務人員', value: staff, required: true },
+      { fieldId: 'booking-slot', label: '預約時段', value: selectedTime, required: true },
+      { fieldId: 'booking-service', label: '服務項目', value: serviceCategory, required: true },
+      { fieldId: 'booking-headcount', label: '人數', value: headcount, required: true },
+      { fieldId: 'booking-gender', label: '性別', value: gender, required: true },
+      { fieldId: 'booking-name', label: '姓名', value: name, required: true, minLength: 2 },
+      { fieldId: 'booking-phone', label: '電話', value: phone, required: true, minLength: 6 },
+      { fieldId: 'booking-email', label: '電子信箱', value: email, required: true },
+    ];
+
+    if (selectedService?.options.length) {
+      rules.push({
+        fieldId: 'booking-service-option',
+        label: '方案選項',
+        value: serviceOption,
+        required: true,
+      });
     }
-    if (selectedService?.options.length && !serviceOption) {
-      setMessage('請選擇方案選項');
+
+    const errors = runValidation(rules);
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      errors['booking-email'] = '請填寫正確的電子信箱';
+    }
+
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) {
+      focusFirstInvalid(errors);
+      setMessage('請完成標示 * 的必填欄位');
       setMessageType('error');
       return;
     }
@@ -160,7 +199,7 @@ export function BookingForm() {
           name,
           gender,
           phone,
-          phoneCountry,
+          phoneCountry: phoneCountryRule.code,
           email,
           note,
         }),
@@ -218,35 +257,64 @@ export function BookingForm() {
   }
 
   return (
-    <form className="booking-form" onSubmit={onSubmit}>
+    <form className="booking-form" onSubmit={onSubmit} noValidate>
       <div className="booking-card">
         <h2>1. 選擇日期與時段</h2>
+        <p className="booking-hint">
+          標示 <abbr className="booking-field-required" title="必填">*</abbr> 為必填
+        </p>
         <div className="booking-grid-2">
-          <label className="booking-field">
-            <span>預約日期 Date</span>
+          <FormField
+            fieldId="booking-date"
+            variant="booking"
+            label="預約日期 Date"
+            required
+            hint="請選擇可預約的營業日"
+            error={fieldErrors['booking-date']}
+          >
             <input
               type="date"
               value={date}
               min={minDate}
               max={maxDate}
-              required
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                touchField('booking-date');
+                setDate(e.target.value);
+              }}
             />
             {date ? <small>{formatDateWithWeekday(date)}</small> : null}
-          </label>
-          <label className="booking-field">
-            <span>服務人員 Staff</span>
-            <select value={staff} required onChange={(e) => setStaff(e.target.value)}>
+          </FormField>
+          <FormField
+            fieldId="booking-staff"
+            variant="booking"
+            label="服務人員 Staff"
+            required
+            error={fieldErrors['booking-staff']}
+          >
+            <select
+              value={staff}
+              onChange={(e) => {
+                touchField('booking-staff');
+                setStaff(e.target.value);
+              }}
+            >
               {config.staff.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
               ))}
             </select>
-          </label>
+          </FormField>
         </div>
-        <div className="booking-field">
-          <span>可預約時段 Available times</span>
+        <FormField
+          fieldId="booking-slot"
+          variant="booking"
+          as="div"
+          label="可預約時段 Available times"
+          required
+          hint={availableSlots.length && !slotsLoading ? slotsHint : slotsHint}
+          error={fieldErrors['booking-slot']}
+        >
           <div
             className="booking-slots-wrap"
             style={{ '--slot-rows': slotGridRows || 4 } as React.CSSProperties}
@@ -258,7 +326,10 @@ export function BookingForm() {
                       key={slot.time}
                       type="button"
                       className={['slot-btn', selectedTime === slot.time ? 'active' : ''].join(' ')}
-                      onClick={() => setSelectedTime(slot.time)}
+                      onClick={() => {
+                        touchField('booking-slot');
+                        setSelectedTime(slot.time);
+                      }}
                     >
                       {slot.time}
                     </button>
@@ -271,19 +342,24 @@ export function BookingForm() {
               <p className="booking-slots-overlay booking-muted">{slotsHint}</p>
             ) : null}
           </div>
-          <p className="booking-hint">{availableSlots.length && !slotsLoading ? slotsHint : '\u00a0'}</p>
-        </div>
+        </FormField>
       </div>
 
       <div className="booking-card">
         <h2>2. 選擇服務</h2>
         <div className="booking-grid-2">
-          <label className="booking-field">
-            <span>服務項目 Service</span>
+          <FormField
+            fieldId="booking-service"
+            variant="booking"
+            label="服務項目 Service"
+            required
+            error={fieldErrors['booking-service']}
+          >
             <select
               value={serviceCategory}
-              required
               onChange={(e) => {
+                touchField('booking-service');
+                touchField('booking-service-option');
                 setServiceCategory(e.target.value);
                 setServiceOption('');
               }}
@@ -294,14 +370,21 @@ export function BookingForm() {
                 </option>
               ))}
             </select>
-          </label>
+          </FormField>
           {selectedService?.options.length ? (
-            <label className="booking-field">
-              <span>方案選項 Plan</span>
+            <FormField
+              fieldId="booking-service-option"
+              variant="booking"
+              label="方案選項 Plan"
+              required
+              error={fieldErrors['booking-service-option']}
+            >
               <select
                 value={serviceOption}
-                required
-                onChange={(e) => setServiceOption(e.target.value)}
+                onChange={(e) => {
+                  touchField('booking-service-option');
+                  setServiceOption(e.target.value);
+                }}
               >
                 <option value="">請選擇</option>
                 {selectedService.options.map((item) => (
@@ -310,7 +393,7 @@ export function BookingForm() {
                   </option>
                 ))}
               </select>
-            </label>
+            </FormField>
           ) : null}
         </div>
         <p className="booking-hint">金額以現場／私訊確認為準；妝造及禮服另外計價。</p>
@@ -319,48 +402,83 @@ export function BookingForm() {
       <div className="booking-card">
         <h2>3. 填寫資料</h2>
         <div className="booking-grid-2">
-          <label className="booking-field">
-            <span>人數 Headcount</span>
-            <select value={headcount} required onChange={(e) => setHeadcount(e.target.value)}>
+          <FormField
+            fieldId="booking-headcount"
+            variant="booking"
+            label="人數 Headcount"
+            required
+            error={fieldErrors['booking-headcount']}
+          >
+            <select
+              value={headcount}
+              onChange={(e) => {
+                touchField('booking-headcount');
+                setHeadcount(e.target.value);
+              }}
+            >
               {config.headcountOptions.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
               ))}
             </select>
-          </label>
-          <label className="booking-field">
-            <span>性別 Gender</span>
-            <select value={gender} required onChange={(e) => setGender(e.target.value)}>
+          </FormField>
+          <FormField
+            fieldId="booking-gender"
+            variant="booking"
+            label="性別 Gender"
+            required
+            error={fieldErrors['booking-gender']}
+          >
+            <select
+              value={gender}
+              onChange={(e) => {
+                touchField('booking-gender');
+                setGender(e.target.value);
+              }}
+            >
               {config.genderOptions.map((item) => (
                 <option key={item.value} value={item.value}>
                   {item.label}
                 </option>
               ))}
             </select>
-          </label>
+          </FormField>
         </div>
-        <label className="booking-field">
-          <span>姓名 Name</span>
+        <FormField
+          fieldId="booking-name"
+          variant="booking"
+          label="姓名 Name"
+          required
+          error={fieldErrors['booking-name']}
+        >
           <input
             type="text"
             maxLength={40}
             placeholder="請填寫姓名"
             value={name}
-            required
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              touchField('booking-name');
+              setName(e.target.value);
+            }}
           />
-        </label>
-        <label className="booking-field">
-          <span>電話 Phone</span>
+        </FormField>
+        <FormField
+          fieldId="booking-phone"
+          variant="booking"
+          label="電話 Phone"
+          required
+          hint={phoneCountryRule.code === '+886' ? '台灣手機 9 開頭 9 碼（不需加 0）' : '請輸入該國有效電話號碼（僅數字）'}
+          error={fieldErrors['booking-phone']}
+        >
           <div className="booking-phone-row">
             <select
-              value={phoneCountry}
-              onChange={(e) => setPhoneCountry(e.target.value)}
+              value={phoneCountryId}
+              onChange={(e) => setPhoneCountryId(e.target.value)}
               aria-label="國碼"
             >
               {PHONE_COUNTRIES.map((item) => (
-                <option key={item.code} value={item.code}>
+                <option key={item.id} value={item.id}>
                   {item.label}
                 </option>
               ))}
@@ -368,36 +486,45 @@ export function BookingForm() {
             <input
               type="tel"
               inputMode="numeric"
-              placeholder={phoneCountry === '+886' ? '912345678' : '電話號碼'}
+              placeholder={phoneCountryRule.code === '+886' ? '912345678' : '電話號碼'}
               value={phone}
-              required
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                touchField('booking-phone');
+                setPhone(e.target.value);
+              }}
             />
           </div>
-          <small className="booking-hint">
-            {phoneCountry === '+886'
-              ? '台灣手機 9 開頭 9 碼（不需加 0）'
-              : '請輸入該國有效電話號碼（僅數字）'}
-          </small>
-        </label>
-        <label className="booking-field">
-          <span>電子信箱 Email</span>
+        </FormField>
+        <FormField
+          fieldId="booking-email"
+          variant="booking"
+          label="電子信箱 Email"
+          required
+          error={fieldErrors['booking-email']}
+        >
           <input
             type="email"
             placeholder="name@example.com"
             value={email}
-            required
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              touchField('booking-email');
+              setEmail(e.target.value);
+            }}
           />
-        </label>
-        <label className="booking-field">
-          <span>備註 Notes（選填）</span>
+        </FormField>
+        <FormField
+          fieldId="booking-note"
+          variant="booking"
+          label="備註 Notes"
+          optional
+          hint="例如：護照＋身分證、兒童證件照…"
+        >
           <textarea
-            placeholder="例如：護照＋身分證、兒童證件照…"
+            placeholder="選填"
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
-        </label>
+        </FormField>
       </div>
 
       <button type="submit" className="booking-submit" disabled={submitting}>

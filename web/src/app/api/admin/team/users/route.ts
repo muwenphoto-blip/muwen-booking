@@ -28,17 +28,54 @@ export async function POST(request: NextRequest) {
     assertManagerRole(session.role);
 
     const body = await request.json();
-    const photographerName = String(body.photographerName || '').trim();
-    const accountName = String(body.accountName || photographerName || '').trim();
     const password = String(body.password || '').trim();
     const role = assertRoleAssignable(session.role, String(body.role || 'deputy'));
+    validatePasswordStrength(password);
+
+    const supabase = createAdminSupabaseClient();
+
+    if (role === '現場') {
+      const accountName = String(body.accountName || '').trim();
+      if (accountName.length < 2) throw new Error('登入帳號至少 2 字');
+
+      const { data: accountExists } = await supabase
+        .from('admin_users')
+        .select('id')
+        .eq('account_name', accountName)
+        .maybeSingle();
+      if (accountExists) throw new Error('此登入帳號已存在');
+
+      const passwordHash = await hashPassword(password);
+      const { error } = await supabase.from('admin_users').insert({
+        account_name: accountName,
+        password_hash: passwordHash,
+        active: true,
+        role,
+        photographer_name: '',
+      });
+      if (error) throw new Error(error.message);
+
+      await supabase.from('admin_logs').insert({
+        admin_account: session.account,
+        admin_role: session.role,
+        action: '新增帳號',
+        summary: `新增「${accountName}」${formatRoleLabel(role)}`,
+        detail: '門市現場服務帳號',
+      });
+
+      return NextResponse.json({
+        ok: true,
+        message: `已新增門市帳號「${accountName}」`,
+      });
+    }
+
+    const photographerName = String(body.photographerName || '').trim();
+    const accountName = String(body.accountName || photographerName || '').trim();
 
     if (photographerName.length < 2) throw new Error('請輸入攝影師姓名');
     if (accountName.length < 2) throw new Error('登入帳號至少 2 字');
     if (photographerName === '不指定') throw new Error('「不指定」為系統保留名稱');
-    validatePasswordStrength(password);
 
-    const supabase = createAdminSupabaseClient();
     const { data: accountExists } = await supabase
       .from('admin_users')
       .select('id')

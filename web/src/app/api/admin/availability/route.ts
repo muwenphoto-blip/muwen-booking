@@ -218,7 +218,7 @@ export async function PUT(request: NextRequest) {
 
     let nextSchedule = baseSchedule;
     let label = '全部時段';
-    let dayOffDates =
+    const dayOffDates =
       session.role === '主' ? [] : normalizeDayOffDates(body.dayOffDates);
     const offSlotsDates =
       session.role === '主'

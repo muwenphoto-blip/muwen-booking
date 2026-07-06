@@ -108,19 +108,30 @@ function buildCalendarRows(monthDays: MonthDay[]): (MonthDay | null)[][] {
   return rows;
 }
 
+function dayHasSchedule(
+  state: DayState,
+  allSlotsMode: boolean,
+  day: MonthDay,
+  showDayOff: boolean,
+): boolean {
+  if (!day.shopOpen) return false;
+  if (showDayOff && state.dayOff) return false;
+  if (!state.active) return false;
+  if (allSlotsMode) return true;
+  return Object.values(state.slots || {}).some(Boolean);
+}
+
 function calendarDayClass(
   day: MonthDay,
   state: DayState,
   useAllSlots: boolean,
   selected: boolean,
-  inView: boolean,
   isToday: boolean,
   showDayOffOption: boolean,
 ): string {
   const classes = ['schedule-calendar__day'];
   if (!day.shopOpen) classes.push('is-closed');
   if (selected) classes.push('is-selected');
-  if (inView) classes.push('is-in-view');
   if (isToday) classes.push('is-today');
   if (useAllSlots && day.shopOpen) classes.push('is-all-slots');
   else if (showDayOffOption && state.dayOff) classes.push('is-day-off');
@@ -249,18 +260,20 @@ export function AdminSchedulePanel() {
   }
 
   function toggleDayActive(date: string, active: boolean) {
+    if (active) {
+      selectAllSlotsForDay(date);
+      return;
+    }
     setUseAllSlots(false);
     setSlotOffModeDates((prev) => ({ ...prev, [date]: false }));
     setDateStates((prev) => ({
       ...prev,
       [date]: {
-        active,
-        expanded: active,
+        active: false,
+        expanded: false,
         dayOff: false,
         offSlots: emptySlotMap(panel?.allSlots ?? []),
-        slots: active
-          ? prev[date]?.slots ?? emptySlotMap(panel?.allSlots ?? [])
-          : emptySlotMap(panel?.allSlots ?? []),
+        slots: emptySlotMap(panel?.allSlots ?? []),
       },
     }));
   }
@@ -336,14 +349,14 @@ export function AdminSchedulePanel() {
 
   function selectDay(date: string) {
     setSelectedDate(date);
-    if (panel) {
-      setDayPageIndex(pageIndexForDate(panel.monthDays, date));
-    }
-    if (isMobile) {
-      window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`schedule-day-${date}`)
+        ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      if (isMobile) {
         document.getElementById('schedule-day-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
+      }
+    });
   }
 
   function shiftDayPage(delta: number) {
@@ -592,28 +605,22 @@ export function AdminSchedulePanel() {
     );
   }
 
-  const maxDayPage = Math.max(0, Math.ceil(panel.monthDays.length / DAYS_PER_VIEW) - 1);
-  const pagedDays = visibleDaysForPage(panel.monthDays, dayPageIndex);
   const visibleDays =
     isMobile && selectedDate
       ? panel.monthDays.filter((day) => day.date === selectedDate)
-      : pagedDays;
-  const visibleDateSet = new Set(
-    isMobile
-      ? selectedDate
-        ? [selectedDate]
-        : []
-      : pagedDays.map((day) => day.date),
-  );
+      : panel.monthDays;
   const calendarRows = buildCalendarRows(panel.monthDays);
   const today = todayDateKey();
-  const pageStart = dayPageIndex * DAYS_PER_VIEW + 1;
-  const pageEnd = Math.min(panel.monthDays.length, (dayPageIndex + 1) * DAYS_PER_VIEW);
   const canEdit = panel.canEdit !== false;
+  const isStoreViewer = sessionInfo?.role === '現場' || panel.viewerRole === '現場';
   const isPhotographer = sessionInfo?.role === '副' || panel.viewerRole === '副';
-  const showDayOffOption = sessionInfo?.role !== '主';
+  const showDayOffOption = sessionInfo?.role !== '主' && !isStoreViewer;
   const isOwnSchedule = sessionInfo?.photographerName === staffName;
-  const pageTitle = isPhotographer
+  const pageTitle = isStoreViewer
+    ? panel.staffOptions.length > 1
+      ? `「${staffName}」班表查詢`
+      : '班表查詢'
+    : isPhotographer
     ? '我的工作時間'
     : panel.staffOptions.length > 1
       ? `「${staffName}」排班表`
@@ -664,8 +671,8 @@ export function AdminSchedulePanel() {
             <>
               <strong>送審中：</strong>
               {panel.isOwnSchedule
-                ? `您的排班已送出，待${panel.pendingApproverLabel || '主控／副主控'}核定後才會套用到客人預約。`
-                : `${staffName} 的排班待${panel.pendingApproverLabel || '主控／副主控'}核定。`}
+                ? `您的排班已送出，待${panel.pendingApproverLabel || '主控／副店長'}核定後才會套用到客人預約。`
+                : `${staffName} 的排班待${panel.pendingApproverLabel || '主控／副店長'}核定。`}
             </>
           )}
         </div>
@@ -676,7 +683,9 @@ export function AdminSchedulePanel() {
           <div>
             <h2>{pageTitle}</h2>
             <p className="admin-muted">
-              {isPhotographer
+              {isStoreViewer
+                ? `營業時段 ${panel.timeRangeLabel} · 唯讀檢視（不含主控排班）`
+                : isPhotographer
                 ? `營業時段 ${panel.timeRangeLabel} · 設定可接案時間與排休`
                 : `營業時段 ${panel.timeRangeLabel} · 已核定：${panel.availabilityLabel}${
                     sessionInfo?.roleLabel && sessionInfo.role !== '副'
@@ -718,11 +727,11 @@ export function AdminSchedulePanel() {
             : (
               <>
                 先選年份與月份，月曆選日期
-                {showDayOffOption ? '；紅色為排休' : ''}。下方一次顯示 <strong>7 天</strong>排班，時段加大方便點選。
+                {showDayOffOption ? '；紅點為排休' : ''}。藍點為今日、橘點為有排班。下方日期可左右拖曳，時段可上下捲動選取。
                 {panel.mustSubmitForApproval
                   ? panel.requiresMasterApproval
                     ? ' 您的排班需送審，僅主控可核定。'
-                    : ' 您的排班需送審，主控／副主控可核定。'
+                    : ' 您的排班需送審，主控／副店長可核定。'
                   : sessionInfo?.role === '主'
                     ? ' 主控儲存後直接生效。'
                     : sessionInfo?.role === '副主'
@@ -786,6 +795,24 @@ export function AdminSchedulePanel() {
                   : '點日期切換下方編輯區 · 淺藍框為目前這 7 天'}
               </span>
             </div>
+            <div className="admin-schedule-picker-hint">
+              <span className="schedule-legend">
+                <span className="schedule-legend__item">
+                  <span className="schedule-legend__today-frame" aria-hidden />
+                  今日
+                </span>
+                <span className="schedule-legend__item">
+                  <span className="schedule-legend__dot is-orange" />
+                  有排班
+                </span>
+                {showDayOffOption ? (
+                  <span className="schedule-legend__item">
+                    <span className="schedule-legend__dot is-red" />
+                    排休
+                  </span>
+                ) : null}
+              </span>
+            </div>
             <div className="schedule-calendar">
               <div className="schedule-calendar__weekdays">
                 {WEEKDAY_HEADERS.map((label) => (
@@ -808,6 +835,8 @@ export function AdminSchedulePanel() {
                     };
                     const dayNum = Number(day.date.slice(-2));
                     const weekday = WEEKDAY_HEADERS[getDayOfWeek(day.date)];
+                    const isToday = day.date === today;
+                    const scheduled = dayHasSchedule(state, useAllSlots, day, showDayOffOption);
                     return (
                       <button
                         key={day.date}
@@ -817,8 +846,7 @@ export function AdminSchedulePanel() {
                           state,
                           useAllSlots,
                           day.date === selectedDate,
-                          visibleDateSet.has(day.date),
-                          day.date === today,
+                          isToday,
                           showDayOffOption,
                         )}
                         disabled={!day.shopOpen || submitting || exporting || loading}
@@ -826,8 +854,10 @@ export function AdminSchedulePanel() {
                       >
                         <span className="schedule-calendar__day-num">{dayNum}</span>
                         <span className="schedule-calendar__day-week">週{weekday}</span>
-                        {day.shopOpen ? (
-                          <span className="schedule-calendar__day-dot" aria-hidden />
+                        {day.shopOpen && showDayOffOption && state.dayOff ? (
+                          <span className="schedule-calendar__day-dot is-red" aria-hidden />
+                        ) : scheduled ? (
+                          <span className="schedule-calendar__day-dot is-orange" aria-hidden />
                         ) : null}
                       </button>
                     );
@@ -835,35 +865,9 @@ export function AdminSchedulePanel() {
                 </div>
               ))}
             </div>
-            <div className="admin-schedule-day-page-nav">
-              {!isMobile ? (
-                <>
-                  <button
-                    type="button"
-                    className="admin-button secondary"
-                    disabled={dayPageIndex <= 0 || submitting || exporting || loading}
-                    onClick={() => shiftDayPage(-1)}
-                  >
-                    上一週（7日）
-                  </button>
-                  <span className="admin-muted">
-                    第 {pageStart}–{pageEnd} 日
-                  </span>
-                  <button
-                    type="button"
-                    className="admin-button secondary"
-                    disabled={dayPageIndex >= maxDayPage || submitting || exporting || loading}
-                    onClick={() => shiftDayPage(1)}
-                  >
-                    下一週（7日）
-                  </button>
-                </>
-              ) : (
-                <span className="admin-muted admin-schedule-mobile-day-label">
-                  編輯中：{panel.monthDays.find((day) => day.date === selectedDate)?.label ?? '請點選日期'}
-                </span>
-              )}
-            </div>
+            <p className="admin-muted admin-schedule-scroll-hint">
+              下方日期列可左右拖曳；各日時段區可上下捲動選取。
+            </p>
           </div>
         </div>
 
@@ -1042,6 +1046,7 @@ export function AdminSchedulePanel() {
               return (
                 <div
                   key={day.date}
+                  id={`schedule-day-${day.date}`}
                   className={[
                     'schedule-day-card',
                     day.shopOpen ? '' : 'is-closed',

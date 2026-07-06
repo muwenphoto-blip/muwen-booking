@@ -10,6 +10,7 @@ import {
   renamePhotographerName,
   validatePersonName,
 } from '@/lib/admin/team-sync';
+import { validateCasePrefix } from '@/lib/booking/case-number';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -28,7 +29,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const supabase = createAdminSupabaseClient();
     const { data: staffRow, error: staffError } = await supabase
       .from('staff')
-      .select('id, name, active')
+      .select('id, name, active, case_prefix')
       .eq('id', id)
       .maybeSingle();
     if (staffError) throw new Error(staffError.message);
@@ -42,6 +43,23 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       if (oldName !== newName) {
         await renamePhotographerName(supabase, oldName, newName);
         changes.push(`姓名→${newName}`);
+      }
+    }
+
+    if (body.casePrefix !== undefined) {
+      const casePrefix = validateCasePrefix(String(body.casePrefix || ''));
+      const currentPrefix = String(staffRow.case_prefix || '').trim().toUpperCase();
+      if (casePrefix !== currentPrefix) {
+        const { data: prefixOwner } = await supabase
+          .from('staff')
+          .select('name')
+          .eq('case_prefix', casePrefix)
+          .neq('id', id)
+          .maybeSingle();
+        if (prefixOwner) throw new Error(`案號前綴 ${casePrefix} 已被「${prefixOwner.name}」使用`);
+        const { error } = await supabase.from('staff').update({ case_prefix: casePrefix }).eq('id', id);
+        if (error) throw new Error(error.message);
+        changes.push(`案號前綴→${casePrefix}`);
       }
     }
 

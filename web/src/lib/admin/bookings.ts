@@ -34,9 +34,17 @@ export function canCloseBooking(status: string): boolean {
   return isBookingConfirmed(status);
 }
 
+export function canCreateDelivery(status: string): boolean {
+  return isBookingConfirmed(status) || status === BOOKING_STATUS_CLOSED;
+}
+
 export function canCancelBooking(status: string): boolean {
   if (isBookingLocked(status)) return false;
   return status !== BOOKING_STATUS_PENDING;
+}
+
+export function canRemoveBooking(status: string): boolean {
+  return status === BOOKING_STATUS_CANCELLED || status === BOOKING_STATUS_REJECTED;
 }
 
 export function isStaffInactive(staffName: string, activeStaffNames: Set<string>): boolean {
