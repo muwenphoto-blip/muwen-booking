@@ -49,7 +49,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (delivery) {
       const { data: photoRows, error: photoError } = await supabase
         .from('delivery_photos')
-        .select('id, kind, file_name, selection, sort_order, created_at')
+        .select('id, kind, file_name, selection, selection_note, sort_order, created_at')
         .eq('delivery_id', delivery.id)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });

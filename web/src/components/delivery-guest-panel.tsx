@@ -9,6 +9,9 @@ type SessionState = {
   mustChangePassword?: boolean;
   phase?: string;
   selectionOpen?: boolean;
+  showSelectionOption?: boolean;
+  showDeliveryOption?: boolean;
+  deliveryReady?: boolean;
   daysRemaining?: number | null;
   finalExpiresLabel?: string;
 };
@@ -17,10 +20,18 @@ type PhotoItem = {
   id: string;
   file_name: string;
   selection: string;
+  selection_note?: string;
   url: string | null;
 };
 
-type View = 'login' | 'change-password' | 'selection' | 'download' | 'locked' | 'expired';
+type View =
+  | 'login'
+  | 'change-password'
+  | 'hub'
+  | 'selection'
+  | 'download'
+  | 'waiting'
+  | 'expired';
 
 export function DeliveryGuestPanel({ slug }: { slug: string }) {
   const [view, setView] = useState<View>('login');
@@ -37,13 +48,11 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const resolveView = useCallback((data: SessionState): View => {
+  const resolveHubView = useCallback((data: SessionState): View => {
     if (!data.loggedIn) return 'login';
     if (data.mustChangePassword) return 'change-password';
     if (data.phase === 'expired') return 'expired';
-    if (data.phase === 'delivering') return 'download';
-    if (data.selectionOpen) return 'selection';
-    return 'locked';
+    return 'hub';
   }, []);
 
   const loadSession = useCallback(async () => {
@@ -55,43 +64,46 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
       mustChangePassword: data.mustChangePassword,
       phase: data.phase,
       selectionOpen: data.selectionOpen,
+      showSelectionOption: data.showSelectionOption,
+      showDeliveryOption: data.showDeliveryOption,
+      deliveryReady: data.deliveryReady,
       daysRemaining: data.daysRemaining,
       finalExpiresLabel: data.finalExpiresLabel,
     };
     setSession(next);
-    setView(resolveView(next));
     return next;
-  }, [slug, resolveView]);
+  }, [slug]);
 
-  const loadPhotos = useCallback(async () => {
-    const res = await fetch(`/api/delivery/${slug}/photos`);
-    const data = await res.json();
-    if (res.status === 401) {
-      const next = await loadSession();
-      setView(resolveView(next));
-      return;
-    }
-    if (!res.ok) throw new Error(data.error || '無法載入照片');
-    setPhotos(data.photos ?? []);
-    if (data.showExpiryNotice) {
-      setShowExpiryModal(true);
-    }
-    if (data.phase === 'delivering') setView('download');
-    else if (data.selectionOpen) setView('selection');
-    else if (data.phase === 'expired') setView('expired');
-    else setView('locked');
-  }, [slug, loadSession, resolveView]);
+  const loadPhotos = useCallback(
+    async (mode: 'selection' | 'delivery') => {
+      const res = await fetch(`/api/delivery/${slug}/photos?mode=${mode}`);
+      const data = await res.json();
+      if (res.status === 401) {
+        const next = await loadSession();
+        setView(resolveHubView(next));
+        return null;
+      }
+      if (!res.ok) throw new Error(data.error || '無法載入照片');
+      setPhotos(data.photos ?? []);
+      if (data.showExpiryNotice) {
+        setShowExpiryModal(true);
+      }
+      return data;
+    },
+    [slug, loadSession, resolveHubView],
+  );
+
+  const goToHub = useCallback(async () => {
+    const next = await loadSession();
+    setPhotos([]);
+    setView(resolveHubView(next));
+  }, [loadSession, resolveHubView]);
 
   useEffect(() => {
     loadSession()
-      .then((data) => {
-        if (data.loggedIn && !data.mustChangePassword) {
-          return loadPhotos();
-        }
-        return undefined;
-      })
+      .then((data) => setView(resolveHubView(data)))
       .catch((err) => setError(err instanceof Error ? err.message : '載入失敗'));
-  }, [loadSession, loadPhotos]);
+  }, [loadSession, resolveHubView]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -107,9 +119,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '登入失敗');
       const next = await loadSession();
-      if (!next.mustChangePassword) {
-        await loadPhotos();
-      }
+      setView(resolveHubView(next));
       setMessage('登入成功');
     } catch (err) {
       setError(err instanceof Error ? err.message : '登入失敗');
@@ -133,11 +143,42 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
       if (!res.ok) throw new Error(data.error || '更新失敗');
       setMessage(data.message || '密碼已更新');
       const next = await loadSession();
-      if (!next.mustChangePassword) {
-        await loadPhotos();
-      }
+      setView(resolveHubView(next));
     } catch (err) {
       setError(err instanceof Error ? err.message : '更新失敗');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openSelection() {
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      await loadPhotos('selection');
+      setView('selection');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '無法載入選片');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openDelivery() {
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const next = await loadSession();
+      if (!next.deliveryReady) {
+        setView('waiting');
+        return;
+      }
+      await loadPhotos('delivery');
+      setView('download');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '無法載入成品');
     } finally {
       setBusy(false);
     }
@@ -168,6 +209,30 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
     }
   }
 
+  async function savePhotoNote(photoId: string, note: string) {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/delivery/${slug}/selection`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setNote', photoId, note }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '儲存備註失敗');
+      setPhotos((prev) =>
+        prev.map((photo) =>
+          photo.id === photoId ? { ...photo, selection_note: data.note || '' } : photo,
+        ),
+      );
+      setMessage('備註已儲存');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '儲存備註失敗');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitSelection() {
     const ok = window.confirm('送出後將鎖定選片，確定？');
     if (!ok) return;
@@ -183,8 +248,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '送出失敗');
       setMessage(data.message || '已送出');
-      await loadSession();
-      setView('locked');
+      await goToHub();
     } catch (err) {
       setError(err instanceof Error ? err.message : '送出失敗');
     } finally {
@@ -192,11 +256,13 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
     }
   }
 
+  const showZipDownload = photos.length > 1;
+
   return (
     <div className="delivery-page">
       <header className="delivery-hero">
         <h1>沐紋映像 · 交片</h1>
-        <p>請依現場指示進行選片或下載成品。</p>
+        <p>請登入後選擇選片或下載成品。</p>
       </header>
 
       {error ? <p className="delivery-error">{error}</p> : null}
@@ -258,17 +324,56 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
         </form>
       ) : null}
 
+      {view === 'hub' ? (
+        <div className="delivery-card delivery-hub">
+          <h2>請選擇</h2>
+          <p className="delivery-muted">依現場指示進入選片或下載成品。</p>
+          <div className="delivery-hub-actions">
+            {session.showSelectionOption ? (
+              <button
+                type="button"
+                className="delivery-hub-btn"
+                disabled={busy}
+                onClick={openSelection}
+              >
+                <strong>選片</strong>
+                <span>挑選要保留的照片並加備註</span>
+              </button>
+            ) : null}
+            {session.showDeliveryOption ? (
+              <button
+                type="button"
+                className="delivery-hub-btn"
+                disabled={busy}
+                onClick={openDelivery}
+              >
+                <strong>交片</strong>
+                <span>
+                  {session.deliveryReady ? '下載修好的成品' : '攝影師正努力中，請稍候'}
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       {view === 'selection' ? (
         <div className="delivery-card">
-          <h2>選片</h2>
+          <div className="delivery-section-head-inline">
+            <h2>選片</h2>
+            <button type="button" className="delivery-link-btn" disabled={busy} onClick={goToHub}>
+              返回
+            </button>
+          </div>
           <p className="delivery-muted">
-            預設全部保留。點照片可全螢幕放大檢視；點 ✗ 可標記不要的照片（會變灰）。
+            預設全部保留。點照片可全螢幕放大；點 ✗ 標記不要的照片；可為每張加備註（會寫在下載檔名後面）。
           </p>
           {photos.length ? (
             <>
               <div className="delivery-grid">
                 {photos.map((photo, index) => {
                   const rejected = photo.selection === 'reject';
+                  const note = String(photo.selection_note || '').trim();
                   return (
                     <article
                       key={photo.id}
@@ -292,6 +397,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
                       >
                         ✗
                       </button>
+                      {note ? <p className="delivery-photo-note-preview">{note}</p> : null}
                     </article>
                   );
                 })}
@@ -311,16 +417,29 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
         </div>
       ) : null}
 
-      {view === 'locked' ? (
+      {view === 'waiting' ? (
         <div className="delivery-card">
-          <h2>選片已完成</h2>
-          <p className="delivery-muted">感謝您！成品準備好後將開放下載，請留意通知。</p>
+          <div className="delivery-section-head-inline">
+            <h2>交片</h2>
+            <button type="button" className="delivery-link-btn" disabled={busy} onClick={goToHub}>
+              返回
+            </button>
+          </div>
+          <p className="delivery-muted delivery-waiting-message">
+            攝影師正努力中，請稍候。
+          </p>
+          <p className="delivery-muted">選片已完成，成品上傳後即可在此下載。</p>
         </div>
       ) : null}
 
       {view === 'download' ? (
         <div className="delivery-card">
-          <h2>下載成品</h2>
+          <div className="delivery-section-head-inline">
+            <h2>交片 · 下載成品</h2>
+            <button type="button" className="delivery-link-btn" disabled={busy} onClick={goToHub}>
+              返回
+            </button>
+          </div>
           {session.finalExpiresLabel ? (
             <p className="delivery-muted">
               下載期限至 {session.finalExpiresLabel}
@@ -329,7 +448,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
           ) : null}
           {photos.length ? (
             <>
-              {photos.length > 1 ? (
+              {showZipDownload ? (
                 <p className="delivery-download-actions">
                   <a
                     href={`/api/delivery/${slug}/download-all`}
@@ -384,6 +503,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
           onClose={() => setLightboxIndex(null)}
           onNavigate={setLightboxIndex}
           onToggleReject={togglePhoto}
+          onSaveNote={savePhotoNote}
         />
       ) : null}
 

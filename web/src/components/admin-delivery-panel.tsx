@@ -22,12 +22,14 @@ type BookingInfo = {
 type DeliveryInfo = {
   id: string;
   url_slug: string;
+  download_slug: string | null;
   password_changed: boolean;
   phase: string;
   selection_locked_at: string | null;
   selection_reopened: boolean;
   finals_started_at: string | null;
   final_expires_at: string | null;
+  completed_at: string | null;
 };
 
 type PhotoRow = {
@@ -35,6 +37,7 @@ type PhotoRow = {
   kind: 'preview' | 'final';
   file_name: string;
   selection: string;
+  selection_note?: string;
   sort_order: number;
   preview_src?: string;
 };
@@ -75,6 +78,7 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
   const previewPhotos = useMemo(() => photos.filter((p) => p.kind === 'preview'), [photos]);
   const finalPhotos = useMemo(() => photos.filter((p) => p.kind === 'final'), [photos]);
   const selectionLocked = Boolean(delivery?.selection_locked_at && !delivery?.selection_reopened);
+  const deliveryCompleted = Boolean(delivery?.completed_at);
 
   const loadData = useCallback(async () => {
     const res = await fetch(`/api/admin/deliveries/${bookingId}`);
@@ -279,13 +283,34 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
     }
   }
 
-  async function copyUrl() {
-    if (!deliveryUrl) return;
+  async function copyUrl(url: string | null, label: string) {
+    if (!url) return;
     try {
-      await navigator.clipboard.writeText(deliveryUrl);
-      setMessage('已複製交片連結');
+      await navigator.clipboard.writeText(url);
+      setMessage(`已複製${label}`);
     } catch {
       setError('無法複製連結，請手動選取');
+    }
+  }
+
+  async function markDeliveryComplete() {
+    const ok = window.confirm(
+      '標記交片完成後，後台「下載選片結果 ZIP」將關閉。確定？',
+    );
+    if (!ok) return;
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/deliveries/${bookingId}/complete`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '操作失敗');
+      setMessage(data.message || '已標記交片完成');
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '操作失敗');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -367,15 +392,20 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                 <span>客人連結</span>
                 <div className="delivery-link-row">
                   <input type="text" readOnly value={deliveryUrl || ''} />
-                  <button type="button" className="admin-button neutral" onClick={copyUrl}>
+                  <button
+                    type="button"
+                    className="admin-button neutral"
+                    onClick={() => copyUrl(deliveryUrl, '客人連結')}
+                  >
                     複製
                   </button>
                 </div>
               </label>
               <p className="admin-muted">
-                預設密碼見後台設定「交片.defaultPassword」，客人首次登入須修改密碼。
+                客人登入後可選「選片」或「交片」。預設密碼見後台設定「交片.defaultPassword」，首次登入須修改密碼。
               </p>
-              {!selectionLocked && !delivery.finals_started_at ? (
+
+              {delivery && !selectionLocked ? (
                 <div className="delivery-admin-actions">
                   <a
                     href={`/delivery/${delivery.url_slug}`}
@@ -383,14 +413,34 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                     rel="noopener noreferrer"
                     className="admin-button primary"
                   >
-                    開啟選片頁
+                    開啟客人頁
                   </a>
-                  <p className="admin-muted">現場請用此頁讓客人選片（須先上傳預覽圖）。</p>
+                  <p className="admin-muted">現場請用此連結讓客人登入選片（須先上傳預覽圖）。</p>
                 </div>
+              ) : null}
+
+              {canManage && delivery?.finals_started_at && !deliveryCompleted ? (
+                <div className="delivery-admin-actions">
+                  <button
+                    type="button"
+                    className="admin-button primary"
+                    disabled={busy}
+                    onClick={markDeliveryComplete}
+                  >
+                    標記交片完成
+                  </button>
+                  <p className="admin-muted">
+                    修圖交件完成後按此按鈕，將關閉後台「下載選片結果 ZIP」。
+                  </p>
+                </div>
+              ) : null}
+
+              {deliveryCompleted ? (
+                <p className="admin-success">交片已完成 · 選片結果 ZIP 已關閉</p>
               ) : null}
             </div>
 
-            {canManage && selectionLocked ? (
+            {canManage && selectionLocked && !deliveryCompleted ? (
               <div className="delivery-admin-actions">
                 <a
                   href={`/api/admin/deliveries/${bookingId}/selection-export`}
@@ -468,6 +518,7 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
                       <p className="delivery-photo-name">{photo.file_name}</p>
                       <p className="delivery-photo-meta">
                         {photo.selection === 'reject' ? '客人標記刪除' : '保留'}
+                        {photo.selection_note ? `｜備註：${photo.selection_note}` : ''}
                       </p>
                       {canManage ? (
                         <button

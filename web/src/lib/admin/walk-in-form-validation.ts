@@ -3,6 +3,13 @@ import { serviceOptionsFor } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import { buildDocumentCustomerRules } from '@/lib/admin/document-form-validation';
 import { runValidation, type ValidationRule } from '@/lib/form-validation';
+import { normalizeCasePrefix } from '@/lib/booking/case-number';
+
+function staffHasCasePrefix(name: string, staffCasePrefixes?: Record<string, string>): boolean {
+  if (!staffCasePrefixes) return true;
+  const prefix = normalizeCasePrefix(staffCasePrefixes[name] || '');
+  return /^[A-Z]{2}$/.test(prefix);
+}
 
 function hasFilledItemRow(rows: BookingDocumentState['itemRows']): boolean {
   return rows.some((row) =>
@@ -25,6 +32,7 @@ export function validateWalkInFormFields(params: {
   gender: string;
   document: BookingDocumentState;
   services: ServiceItem[];
+  staffCasePrefixes?: Record<string, string>;
 }): Record<string, string> {
   const doc = params.document;
 
@@ -39,6 +47,11 @@ export function validateWalkInFormFields(params: {
   ];
 
   const errors = runValidation(rules);
+
+  if (params.staff && !staffHasCasePrefix(params.staff, params.staffCasePrefixes)) {
+    errors['walk-in-staff'] =
+      `攝影師「${params.staff}」尚未設定案號前綴，請至團隊管理編輯並儲存 2 碼英文前綴`;
+  }
 
   const options = serviceOptionsFor(doc.service, params.services);
   if (options.length > 0 && !String(doc.serviceOption || '').trim()) {
@@ -66,6 +79,7 @@ export function isWalkInFormComplete(params: {
   gender: string;
   document: BookingDocumentState;
   services: ServiceItem[];
+  staffCasePrefixes?: Record<string, string>;
 }): boolean {
   return Object.keys(validateWalkInFormFields(params)).length === 0;
 }

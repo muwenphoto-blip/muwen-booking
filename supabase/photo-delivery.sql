@@ -13,6 +13,8 @@ create table if not exists public.photo_deliveries (
   selection_reopened boolean not null default false,
   finals_started_at timestamptz,
   final_expires_at timestamptz,
+  download_slug text unique,
+  completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -34,6 +36,7 @@ create table if not exists public.delivery_photos (
   file_name text not null default '',
   selection text not null default 'pending'
     check (selection in ('pending', 'keep', 'reject')),
+  selection_note text not null default '',
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );

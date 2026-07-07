@@ -1,11 +1,13 @@
 import { ZipArchive } from 'archiver';
 import { PassThrough, Readable } from 'node:stream';
 import { NextRequest, NextResponse } from 'next/server';
+import { isDeliveryCompleted } from '@/lib/delivery/access';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { isManagerRole } from '@/lib/admin/session';
 import { DELIVERY_STORAGE_BUCKET } from '@/lib/delivery/constants';
 import { buildSelectionZipFilename } from '@/lib/booking/case-number';
 import {
+  appendNoteToFilename,
   buildSelectionManifest,
   isPhotoKept,
   sanitizeZipEntryName,
@@ -45,10 +47,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (!delivery.selection_locked_at || delivery.selection_reopened) {
       throw new Error('客人尚未完成選片');
     }
+    if (isDeliveryCompleted(delivery)) {
+      throw new Error('交片已完成，選片結果 ZIP 已關閉');
+    }
 
     const { data: photos, error: photoError } = await supabase
       .from('delivery_photos')
-      .select('id, file_name, selection, storage_path, sort_order')
+      .select('id, file_name, selection, selection_note, storage_path, sort_order')
       .eq('delivery_id', delivery.id)
       .eq('kind', 'preview')
       .order('sort_order', { ascending: true });
@@ -86,7 +91,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         throw new Error(`無法下載：${photo.file_name}`);
       }
       const buffer = Buffer.from(await blob.arrayBuffer());
-      let entryName = sanitizeZipEntryName(photo.file_name, `${photo.id}.jpg`);
+      let entryName = sanitizeZipEntryName(
+        appendNoteToFilename(photo.file_name, String(photo.selection_note || '')),
+        `${photo.id}.jpg`,
+      );
       if (!entryName.includes('.')) entryName += '.jpg';
       while (usedNames.has(entryName)) {
         const dot = entryName.lastIndexOf('.');

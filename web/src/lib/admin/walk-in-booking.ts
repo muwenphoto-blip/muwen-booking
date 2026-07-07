@@ -4,11 +4,15 @@ import { normalizePhone } from '@/lib/booking/phone';
 import { getPhoneCountryRule } from '@/lib/booking/phone-countries';
 import { addDaysToDateKey, todayDateKey } from '@/lib/booking/time';
 import { BOOKING_STATUS_CONFIRMED } from '@/lib/admin/bookings';
+import { normalizeCasePrefix, validateCasePrefix } from '@/lib/booking/case-number';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import {
   formatBookingNoteFromDocument,
   formatBookingServiceFromDocument,
 } from '@/lib/admin/booking-document-store';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+
+type AdminSupabaseClient = ReturnType<typeof createAdminSupabaseClient>;
 
 export type WalkInBookingPayload = {
   date: string;
@@ -150,6 +154,33 @@ export function validateWalkInCreatePayload(
 
   const validated = validateWalkInPayload(payload, config);
   return { ...validated, document };
+}
+
+export async function assertStaffCasePrefixReady(
+  supabase: AdminSupabaseClient,
+  staffName: string,
+) {
+  const name = String(staffName || '').trim();
+  if (!name || name === '不指定') {
+    throw new Error('請選擇服務人員');
+  }
+
+  const { data, error } = await supabase
+    .from('staff')
+    .select('case_prefix')
+    .eq('name', name)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error(`找不到攝影師「${name}」，請至團隊管理確認名稱是否一致`);
+  }
+
+  const prefix = normalizeCasePrefix(String(data.case_prefix || ''));
+  if (!validateCasePrefix(prefix)) {
+    throw new Error(
+      `攝影師「${name}」尚未設定案號前綴，請至團隊管理編輯該攝影師並儲存 2 碼英文前綴（例如 XE）`,
+    );
+  }
 }
 
 export async function assertWalkInSlotAvailable(

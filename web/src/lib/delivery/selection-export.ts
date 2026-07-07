@@ -15,6 +15,34 @@ export function sanitizeZipEntryName(name: string, fallback: string): string {
   return base || fallback;
 }
 
+const NOTE_FILENAME_MAX = 40;
+
+export function sanitizeNoteForFilename(note: string): string {
+  return String(note || '')
+    .trim()
+    .replace(/[/\\:*?"<>|\r\n]/g, '')
+    .replace(/\s+/g, '_')
+    .slice(0, NOTE_FILENAME_MAX);
+}
+
+export function appendNoteToFilename(fileName: string, note: string): string {
+  const sanitized = sanitizeNoteForFilename(note);
+  if (!sanitized) return fileName;
+  const dot = fileName.lastIndexOf('.');
+  if (dot > 0) {
+    return `${fileName.slice(0, dot)}_${sanitized}${fileName.slice(dot)}`;
+  }
+  return `${fileName}_${sanitized}`;
+}
+
+export function validateSelectionNote(note: string): string {
+  const trimmed = String(note || '').trim();
+  if (trimmed.length > 120) {
+    throw new Error('備註最多 120 字');
+  }
+  return trimmed;
+}
+
 export function buildSelectionManifest(options: {
   caseNumber: string;
   customerName: string;
@@ -22,8 +50,8 @@ export function buildSelectionManifest(options: {
   bookingDate: string;
   bookingTime: string;
   lockedAt: string | null;
-  kept: Pick<DeliveryPhotoRecord, 'file_name' | 'sort_order'>[];
-  rejected: Pick<DeliveryPhotoRecord, 'file_name' | 'sort_order'>[];
+  kept: Pick<DeliveryPhotoRecord, 'file_name' | 'sort_order' | 'selection_note'>[];
+  rejected: Pick<DeliveryPhotoRecord, 'file_name' | 'sort_order' | 'selection_note'>[];
 }): string {
   const lines = [
     '沐紋映像｜選片紀錄',
@@ -39,7 +67,8 @@ export function buildSelectionManifest(options: {
 
   if (options.kept.length) {
     options.kept.forEach((photo, index) => {
-      lines.push(`${index + 1}. ${photo.file_name}`);
+      const note = String(photo.selection_note || '').trim();
+      lines.push(`${index + 1}. ${photo.file_name}${note ? `｜備註：${note}` : ''}`);
     });
   } else {
     lines.push('（無）');
@@ -48,7 +77,8 @@ export function buildSelectionManifest(options: {
   lines.push('', `刪除（${options.rejected.length} 張）`);
   if (options.rejected.length) {
     options.rejected.forEach((photo, index) => {
-      lines.push(`${index + 1}. ${photo.file_name}`);
+      const note = String(photo.selection_note || '').trim();
+      lines.push(`${index + 1}. ${photo.file_name}${note ? `｜備註：${note}` : ''}`);
     });
   } else {
     lines.push('（無）');

@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getDeliveryGuestSession, loadDeliveryBySlug, syncDeliveryExpiry } from '@/lib/delivery/store';
 import { getDeliverySessionCookieName } from '@/lib/delivery/session';
 import {
   daysUntilExpiry,
   formatExpiryDate,
+  guestDeliveryReady,
+  guestShowDeliveryOption,
+  guestShowSelectionOption,
+  isDeliveryCompleted,
   isSelectionOpen,
   resolveDeliveryPhase,
 } from '@/lib/delivery/access';
+import { getDeliveryGuestSession, loadDeliveryBySlug, syncDeliveryExpiry } from '@/lib/delivery/store';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -32,10 +36,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       mustChangePassword: !delivery.password_changed,
       phase,
       selectionOpen: isSelectionOpen(delivery),
+      showSelectionOption: guestShowSelectionOption(delivery),
+      showDeliveryOption: guestShowDeliveryOption(delivery),
+      deliveryReady: guestDeliveryReady(delivery),
       selectionLockedAt: delivery.selection_locked_at,
       finalExpiresAt: delivery.final_expires_at,
       finalExpiresLabel: formatExpiryDate(delivery.final_expires_at),
       daysRemaining: daysUntilExpiry(delivery.final_expires_at),
+      completedAt: delivery.completed_at,
+      deliveryCompleted: isDeliveryCompleted(delivery),
     });
   } catch (err) {
     return NextResponse.json(

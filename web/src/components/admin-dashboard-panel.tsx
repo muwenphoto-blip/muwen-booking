@@ -385,6 +385,7 @@ export function AdminDashboardPanel() {
   const [photographerName, setPhotographerName] = useState('');
   const [canCreateWalkIn, setCanCreateWalkIn] = useState(false);
   const [canAssignWalkInStaff, setCanAssignWalkInStaff] = useState(false);
+  const [staffCasePrefixes, setStaffCasePrefixes] = useState<Record<string, string>>({});
 
   function openDocuments(bookingId: string, caseNumber: string) {
     setDocumentsBookingId(bookingId);
@@ -418,6 +419,7 @@ export function AdminDashboardPanel() {
     setPhotographerName(bookingsData.photographerName ?? '');
     setCanCreateWalkIn(Boolean(bookingsData.canCreateWalkIn));
     setCanAssignWalkInStaff(Boolean(bookingsData.isManager || bookingsData.isStoreStaff));
+    setStaffCasePrefixes(bookingsData.staffCasePrefixes ?? {});
     if (!options?.silent) {
       setError('');
     }
@@ -720,6 +722,7 @@ export function AdminDashboardPanel() {
         open={walkInOpen}
         canAssignStaff={canAssignWalkInStaff}
         photographerName={photographerName}
+        staffCasePrefixes={staffCasePrefixes}
         onClose={() => setWalkInOpen(false)}
         onSuccess={(booking) => {
           setMessage(

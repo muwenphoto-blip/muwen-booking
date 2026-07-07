@@ -4,7 +4,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { resolveDeliveryPhase } from '@/lib/delivery/access';
 import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
 import { sanitizeZipEntryName } from '@/lib/delivery/selection-export';
-import { getDeliveryGuestSession, loadDeliveryBySlug } from '@/lib/delivery/store';
+import {
+  getDeliveryGuestSession,
+  loadDeliveryBySlug,
+  loadPreviewNoteMap,
+  resolveFinalDownloadFilename,
+} from '@/lib/delivery/store';
 import { buildFinalsZipFilename } from '@/lib/booking/case-number';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -27,6 +32,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     const supabase = createAdminSupabaseClient();
+    const noteMap = await loadPreviewNoteMap(delivery.id);
     const { data: photos, error: photoError } = await supabase
       .from('delivery_photos')
       .select('id, storage_path, file_name')
@@ -49,7 +55,10 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const usedNames = new Set<string>();
     for (const photo of photos) {
       const file = await loadDeliveryPhotoFile(photo.storage_path);
-      let entryName = sanitizeZipEntryName(photo.file_name, `${photo.id}.jpg`);
+      let entryName = sanitizeZipEntryName(
+        resolveFinalDownloadFilename(photo.file_name, noteMap),
+        `${photo.id}.jpg`,
+      );
       if (!entryName.includes('.')) entryName += '.jpg';
       while (usedNames.has(entryName)) {
         const dot = entryName.lastIndexOf('.');

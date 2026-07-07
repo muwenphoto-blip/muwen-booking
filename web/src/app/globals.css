@@ -3109,6 +3109,69 @@ body {
   font-size: 1.15rem;
 }
 
+.delivery-hub-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.delivery-hub-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid var(--booking-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.delivery-hub-btn strong {
+  font-size: 1.05rem;
+}
+
+.delivery-hub-btn span {
+  color: var(--booking-muted);
+  font-size: 0.88rem;
+}
+
+.delivery-hub-btn:hover:not(:disabled) {
+  border-color: var(--booking-accent, #2563eb);
+  background: #f8fbff;
+}
+
+.delivery-section-head-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.delivery-section-head-inline h2 {
+  margin: 0;
+}
+
+.delivery-waiting-message {
+  font-size: 1.05rem;
+  text-align: center;
+  padding: 12px 0;
+}
+
+.delivery-link-btn {
+  border: 0;
+  background: none;
+  color: var(--booking-accent, #2563eb);
+  font: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
 .delivery-field {
   display: flex;
   flex-direction: column;
@@ -3383,10 +3446,54 @@ body {
 
 .delivery-lightbox-foot {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.delivery-lightbox-actions {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.delivery-lightbox-note {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delivery-lightbox-note label {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.9rem;
+}
+
+.delivery-lightbox-note input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font: inherit;
+}
+
+.delivery-lightbox-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.delivery-photo-note-preview {
+  margin: 0;
+  padding: 4px 8px 8px;
+  font-size: 0.78rem;
+  color: var(--booking-muted);
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .delivery-lightbox-reject {

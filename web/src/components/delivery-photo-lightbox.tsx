@@ -1,12 +1,13 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DeliveryImage } from '@/components/delivery-image';
 
 type PhotoItem = {
   id: string;
   file_name: string;
   selection: string;
+  selection_note?: string;
   url: string | null;
 };
 
@@ -17,6 +18,7 @@ type Props = {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onToggleReject: (photoId: string) => void;
+  onSaveNote?: (photoId: string, note: string) => void;
 };
 
 export function DeliveryPhotoLightbox({
@@ -26,11 +28,17 @@ export function DeliveryPhotoLightbox({
   onClose,
   onNavigate,
   onToggleReject,
+  onSaveNote,
 }: Props) {
   const photo = photos[index];
   const rejected = photo?.selection === 'reject';
   const hasPrev = index > 0;
   const hasNext = index < photos.length - 1;
+  const [noteDraft, setNoteDraft] = useState('');
+
+  useEffect(() => {
+    setNoteDraft(String(photo?.selection_note || ''));
+  }, [photo?.id, photo?.selection_note]);
 
   const goPrev = useCallback(() => {
     if (hasPrev) onNavigate(index - 1);
@@ -59,6 +67,8 @@ export function DeliveryPhotoLightbox({
   }, [onClose, goPrev, goNext]);
 
   if (!photo) return null;
+
+  const noteChanged = noteDraft.trim() !== String(photo.selection_note || '').trim();
 
   return (
     <div
@@ -108,14 +118,43 @@ export function DeliveryPhotoLightbox({
         </div>
 
         <footer className="delivery-lightbox-foot">
-          <button
-            type="button"
-            className={`delivery-lightbox-reject${rejected ? ' active' : ''}`}
-            disabled={busy}
-            onClick={() => onToggleReject(photo.id)}
-          >
-            {rejected ? '改為保留' : '標記不要（✗）'}
-          </button>
+          <div className="delivery-lightbox-actions">
+            <button
+              type="button"
+              className={`delivery-lightbox-reject${rejected ? ' active' : ''}`}
+              disabled={busy}
+              onClick={() => onToggleReject(photo.id)}
+            >
+              {rejected ? '改為保留' : '標記不要（✗）'}
+            </button>
+          </div>
+
+          {onSaveNote ? (
+            <div className="delivery-lightbox-note">
+              <label htmlFor="delivery-photo-note">修圖備註</label>
+              <input
+                id="delivery-photo-note"
+                type="text"
+                value={noteDraft}
+                maxLength={120}
+                placeholder="例如：放大眼睛、背景調亮"
+                disabled={busy}
+                onChange={(e) => setNoteDraft(e.target.value)}
+              />
+              <div className="delivery-lightbox-note-actions">
+                <button
+                  type="button"
+                  className="delivery-button small"
+                  disabled={busy || !noteChanged}
+                  onClick={() => onSaveNote(photo.id, noteDraft.trim())}
+                >
+                  儲存備註
+                </button>
+                <p className="delivery-lightbox-hint">備註會加在成品下載檔名後面，方便溝通修圖需求</p>
+              </div>
+            </div>
+          ) : null}
+
           <p className="delivery-lightbox-hint">左右鍵切換 · Esc 關閉</p>
         </footer>
       </div>

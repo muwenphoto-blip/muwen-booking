@@ -21,6 +21,7 @@ import {
   updatePayment,
   getItemRowTotal,
   calcItemRowTotal,
+  parseAmount,
 } from '@/components/booking-document-shared';
 import type { BookingDocumentSharedProps } from '@/components/booking-document-shared';
 
@@ -97,6 +98,13 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
   function finishEdit(index: number) {
     const row = state.itemRows[index];
     if (!isItemRowFilled(row)) return;
+    if ((parseAmount(row.price) || parseAmount(row.discount)) && !String(row.quantity || '').trim()) {
+      onChange(
+        updateItemRowWithCalc(state, index, {
+          quantity: '1',
+        }),
+      );
+    }
     setEditingIndex(null);
     setDraftIndex(null);
   }

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveDeliveryPhase } from '@/lib/delivery/access';
 import { loadDeliveryPhotoFile } from '@/lib/delivery/load-photo-file';
-import { getDeliveryGuestSession, loadDeliveryBySlug } from '@/lib/delivery/store';
+import {
+  getDeliveryGuestSession,
+  loadDeliveryBySlug,
+  loadPreviewNoteMap,
+  resolveFinalDownloadFilename,
+} from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ slug: string; photoId: string }> };
@@ -23,6 +28,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     const supabase = createAdminSupabaseClient();
+    const noteMap = await loadPreviewNoteMap(delivery.id);
     const { data: photo, error } = await supabase
       .from('delivery_photos')
       .select('id, storage_path, file_name, kind')
@@ -34,7 +40,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (!photo) throw new Error('找不到檔案');
 
     const file = await loadDeliveryPhotoFile(photo.storage_path);
-    const filename = encodeURIComponent(photo.file_name || 'download');
+    const downloadName = resolveFinalDownloadFilename(photo.file_name || 'download', noteMap);
+    const filename = encodeURIComponent(downloadName);
     return new NextResponse(file.body, {
       headers: {
         'Content-Type': file.contentType,

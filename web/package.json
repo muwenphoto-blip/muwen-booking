@@ -10,7 +10,8 @@
     "start": "next start",
     "start:mobile": "next start -H 0.0.0.0 -p 3000",
     "lint": "eslint",
-    "check": "node scripts/self-check.mjs"
+    "check": "node scripts/self-check.mjs",
+    "test:brutal": "node scripts/brutal-test.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-tc": "^5.2.9",

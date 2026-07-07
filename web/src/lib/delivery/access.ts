@@ -20,12 +20,71 @@ export function resolveDeliveryPhase(
   return delivery.phase === 'expired' ? 'expired' : delivery.phase;
 }
 
-export function isSelectionOpen(
-  delivery: Pick<DeliveryRecord, 'selection_locked_at' | 'selection_reopened' | 'phase' | 'final_expires_at' | 'finals_started_at'>,
+export function isDeliveryCompleted(
+  delivery: Pick<DeliveryRecord, 'completed_at'>,
 ): boolean {
+  return Boolean(delivery.completed_at);
+}
+
+export function isSelectionOpen(
+  delivery: Pick<
+    DeliveryRecord,
+    | 'selection_locked_at'
+    | 'selection_reopened'
+    | 'phase'
+    | 'final_expires_at'
+    | 'finals_started_at'
+    | 'completed_at'
+  >,
+): boolean {
+  if (isDeliveryCompleted(delivery)) return false;
   if (resolveDeliveryPhase(delivery) === 'expired') return false;
   if (delivery.selection_locked_at && !delivery.selection_reopened) return false;
   return true;
+}
+
+export function isSelectionLocked(
+  delivery: Pick<DeliveryRecord, 'selection_locked_at' | 'selection_reopened'>,
+): boolean {
+  return Boolean(delivery.selection_locked_at && !delivery.selection_reopened);
+}
+
+/** 客人選單：選片階段顯示選片入口 */
+export function guestShowSelectionOption(
+  delivery: Pick<
+    DeliveryRecord,
+    | 'selection_locked_at'
+    | 'selection_reopened'
+    | 'phase'
+    | 'final_expires_at'
+    | 'finals_started_at'
+    | 'completed_at'
+  >,
+): boolean {
+  if (resolveDeliveryPhase(delivery) === 'expired') return false;
+  return isSelectionOpen(delivery);
+}
+
+/** 客人選單：選片完成後顯示交片入口 */
+export function guestShowDeliveryOption(
+  delivery: Pick<
+    DeliveryRecord,
+    | 'selection_locked_at'
+    | 'selection_reopened'
+    | 'phase'
+    | 'final_expires_at'
+    | 'finals_started_at'
+  >,
+): boolean {
+  if (resolveDeliveryPhase(delivery) === 'expired') return false;
+  return isSelectionLocked(delivery);
+}
+
+/** 成品已上傳，可下載 */
+export function guestDeliveryReady(
+  delivery: Pick<DeliveryRecord, 'final_expires_at' | 'phase' | 'finals_started_at'>,
+): boolean {
+  return resolveDeliveryPhase(delivery) === 'delivering';
 }
 
 export function formatExpiryDate(iso: string | null): string {

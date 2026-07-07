@@ -12,6 +12,7 @@ import {
 } from '@/lib/admin/bookings';
 import {
   assertWalkInSlotAvailable,
+  assertStaffCasePrefixReady,
   validateWalkInCreatePayload,
   WALK_IN_DEFAULT_STATUS,
   type WalkInCreatePayload,
@@ -61,6 +62,18 @@ export async function GET() {
       manager || session.role === '現場' ? await listActivePhotographerNames() : [];
     const activeSet = new Set(staffOptions);
 
+    const { data: staffRows, error: staffPrefixError } = await supabase
+      .from('staff')
+      .select('name, case_prefix')
+      .eq('active', true);
+    if (staffPrefixError) throw new Error(staffPrefixError.message);
+    const staffCasePrefixes: Record<string, string> = {};
+    (staffRows ?? []).forEach((row) => {
+      staffCasePrefixes[String(row.name)] = String(row.case_prefix || '')
+        .trim()
+        .toUpperCase();
+    });
+
     const closableIds = (data ?? [])
       .filter((row) => manager && canCloseBooking(row.status))
       .map((row) => row.id);
@@ -105,6 +118,7 @@ export async function GET() {
     return NextResponse.json({
       bookings,
       staffOptions,
+      staffCasePrefixes,
       isManager: manager,
       isStoreStaff: session.role === '現場',
       canCreateWalkIn: canCreateWalkInBooking(session.role),
@@ -146,6 +160,7 @@ export async function POST(request: NextRequest) {
     await assertActivePhotographerName(payload.staff);
 
     const supabase = createAdminSupabaseClient();
+    await assertStaffCasePrefixReady(supabase, payload.staff);
     const [{ data: staffRows }, { data: counts }] = await Promise.all([
       supabase.from('staff_public').select('name, availability_schedule'),
       supabase.rpc('get_booking_slot_counts', { p_date: payload.date }),

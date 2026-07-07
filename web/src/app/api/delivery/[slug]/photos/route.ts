@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   daysUntilExpiry,
   formatExpiryDate,
+  guestDeliveryReady,
   isSelectionOpen,
   resolveDeliveryPhase,
 } from '@/lib/delivery/access';
@@ -10,6 +11,7 @@ import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 type RouteContext = { params: Promise<{ slug: string }> };
+type GuestPhotoMode = 'selection' | 'delivery';
 
 async function requireGuest(slug: string) {
   const guest = await getDeliveryGuestSession();
@@ -33,24 +35,37 @@ async function requireGuest(slug: string) {
   return delivery;
 }
 
-export async function GET(_request: NextRequest, context: RouteContext) {
+function parsePhotoMode(request: NextRequest): GuestPhotoMode {
+  const mode = request.nextUrl.searchParams.get('mode');
+  return mode === 'delivery' ? 'delivery' : 'selection';
+}
+
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { slug } = await context.params;
     const delivery = await requireGuest(slug);
+    const mode = parsePhotoMode(request);
     const phase = resolveDeliveryPhase(delivery);
     const supabase = createAdminSupabaseClient();
 
+    if (mode === 'delivery' && !guestDeliveryReady(delivery)) {
+      return NextResponse.json({
+        phase,
+        mode,
+        selectionOpen: false,
+        deliveryReady: false,
+        waitingForFinals: true,
+        photos: [],
+      });
+    }
+
     let query = supabase
       .from('delivery_photos')
-      .select('id, kind, file_name, selection, sort_order, storage_path')
+      .select('id, kind, file_name, selection, selection_note, sort_order, storage_path')
       .eq('delivery_id', delivery.id)
       .order('sort_order', { ascending: true });
 
-    if (phase === 'delivering') {
-      query = query.eq('kind', 'final');
-    } else {
-      query = query.eq('kind', 'preview');
-    }
+    query = query.eq('kind', mode === 'delivery' ? 'final' : 'preview');
 
     const { data: photos, error } = await query;
     if (error) throw new Error(error.message);
@@ -73,6 +88,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           kind: photo.kind,
           file_name: photo.file_name,
           selection: photo.selection,
+          selection_note: photo.selection_note || '',
           url,
         };
       }),
@@ -80,12 +96,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({
       phase,
-      selectionOpen: isSelectionOpen(delivery),
+      mode,
+      selectionOpen: mode === 'selection' && isSelectionOpen(delivery),
+      deliveryReady: guestDeliveryReady(delivery),
       selectionLockedAt: delivery.selection_locked_at,
       finalExpiresAt: delivery.final_expires_at,
       finalExpiresLabel: formatExpiryDate(delivery.final_expires_at),
       daysRemaining: daysUntilExpiry(delivery.final_expires_at),
-      showExpiryNotice: phase === 'delivering',
+      showExpiryNotice: mode === 'delivery' && phase === 'delivering',
       photos: items,
     });
   } catch (err) {

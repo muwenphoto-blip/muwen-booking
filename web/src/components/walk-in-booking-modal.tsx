@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { BookingConfig, BookingSlot } from '@/lib/booking/types';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE } from '@/lib/admin/booking-documents';
@@ -8,11 +8,8 @@ import {
   applyBookingSlotToDocument,
   buildEmptyWalkInDocument,
 } from '@/lib/admin/booking-document-store';
-import { printDocument } from '@/lib/admin/booking-document-export';
-import { BookingDocumentStudioModal } from '@/components/booking-document-studio-modal';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
 import { BookingDocumentUnifiedEdit, BookingDocumentFeeFooter } from '@/components/booking-document-edit-views';
-import { BookingDocumentPrintBundle } from '@/components/booking-document-print-bundle';
 import { FormField } from '@/components/form-field';
 import { clearFieldError, focusFirstInvalid } from '@/lib/form-validation';
 import { validateDocumentFieldOnBlur } from '@/lib/admin/document-form-validation';
@@ -30,6 +27,7 @@ type WalkInBookingModalProps = {
   open: boolean;
   canAssignStaff: boolean;
   photographerName: string;
+  staffCasePrefixes?: Record<string, string>;
   onClose: () => void;
   onSuccess: (booking: CreatedBooking) => void;
 };
@@ -46,10 +44,10 @@ export function WalkInBookingModal({
   open,
   canAssignStaff,
   photographerName,
+  staffCasePrefixes,
   onClose,
   onSuccess,
 }: WalkInBookingModalProps) {
-  const printRef = useRef<HTMLDivElement>(null);
   const [config, setConfig] = useState<BookingConfig | null>(null);
   const [loadError, setLoadError] = useState('');
   const [date, setDate] = useState('');
@@ -62,12 +60,10 @@ export function WalkInBookingModal({
   const [docState, setDocState] = useState<BookingDocumentState | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [busy, setBusy] = useState<'print' | 'download' | null>(null);
   const [created, setCreated] = useState<CreatedBooking | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [handlerOptions, setHandlerOptions] = useState<TeamHandlerOption[]>([]);
   const [defaultHandler, setDefaultHandler] = useState('');
-  const [studioOpen, setStudioOpen] = useState(false);
 
   const staffChoices = useMemo(() => {
     if (!config) return [];
@@ -84,7 +80,6 @@ export function WalkInBookingModal({
     setError('');
     setCreated(null);
     setSubmitting(false);
-    setBusy(null);
     setSelectedTime('');
     setSlots([]);
     setFieldErrors({});
@@ -98,12 +93,12 @@ export function WalkInBookingModal({
         setGender(data.genderOptions[0]?.value ?? '');
 
         const photographers = data.staff.filter((item: { value: string }) => item.value !== '不指定');
+        const matchedStaff = photographers.find(
+          (item: { value: string }) => item.value === photographerName.trim(),
+        );
         const defaultStaff = canAssignStaff
           ? photographers[0]?.value ?? ''
-          : photographers.find((item: { value: string }) => item.value === photographerName)?.value ||
-            photographerName ||
-            photographers[0]?.value ||
-            '';
+          : matchedStaff?.value || photographers[0]?.value || '';
         setStaff(defaultStaff);
 
         const today = new Date();
@@ -216,19 +211,9 @@ export function WalkInBookingModal({
       gender,
       document: docState,
       services: config.services,
+      staffCasePrefixes,
     });
-  }, [docState, config, date, staff, selectedTime, headcount, gender]);
-
-  const printProps =
-    docState && config
-      ? {
-          state: { ...docState, caseNumber: created?.case_number || docState.caseNumber },
-          shopName: config.shopName,
-          shopFullName: SHOP_FULL_NAME,
-          shopAddress: SHOP_ADDRESS,
-          shopPhone: SHOP_PHONE,
-        }
-      : null;
+  }, [docState, config, date, staff, selectedTime, headcount, gender, staffCasePrefixes]);
 
   function resetForm() {
     setCreated(null);
@@ -278,6 +263,7 @@ export function WalkInBookingModal({
       gender,
       document: docState,
       services: config.services,
+      staffCasePrefixes,
     });
     setFieldErrors(errors);
     if (Object.keys(errors).length) {
@@ -317,18 +303,6 @@ export function WalkInBookingModal({
     }
   }
 
-  function handleOpenStudio() {
-    if (!docState) return;
-    setStudioOpen(true);
-  }
-
-  function handlePrintAll() {
-    if (!printRef.current) return;
-    setBusy('print');
-    printDocument(printRef.current);
-    setBusy(null);
-  }
-
   if (!open) return null;
 
   const sharedDocProps =
@@ -364,7 +338,7 @@ export function WalkInBookingModal({
             <p className="booking-doc-modal-eyebrow">沐紋映像 · 門市登記</p>
             <h3 id="walk-in-booking-title">門市預約登記</h3>
             <p className="booking-doc-modal-sub">
-              一次填寫服務項目與明細；建立後可直接列印項目表、合約表、估價單一式三份
+              一次填寫服務項目與明細，建立後資料會儲存至預約
             </p>
           </div>
           <button type="button" className="admin-modal-close" onClick={onClose} aria-label="關閉">
@@ -378,22 +352,6 @@ export function WalkInBookingModal({
               案號 {created.case_number || '—'}｜{created.customer_name}
             </p>
             <div className="booking-doc-actions">
-              <button
-                type="button"
-                className="admin-button secondary"
-                disabled={busy !== null}
-                onClick={handlePrintAll}
-              >
-                {busy === 'print' ? '處理中…' : '列印'}
-              </button>
-              <button
-                type="button"
-                className="admin-button"
-                disabled={busy !== null}
-                onClick={handleOpenStudio}
-              >
-                下載
-              </button>
               <button type="button" className="admin-button secondary" onClick={onClose}>
                 完成
               </button>
@@ -414,7 +372,7 @@ export function WalkInBookingModal({
               ✓
             </div>
             <h4>門市預約已建立</h4>
-            <p className="admin-muted">資料已儲存，可按上方按鈕列印或開啟文件工作室下載。</p>
+            <p className="admin-muted">資料已儲存，可至預約列表的「文件」繼續編輯。</p>
           </div>
         ) : (
           <form className="booking-doc-edit-body booking-walk-in-form" onSubmit={onSubmit} noValidate>
@@ -553,7 +511,7 @@ export function WalkInBookingModal({
 
             <section className="booking-walk-in-form-divider">
               <h4>② 登記資料</h4>
-              <p>除客戶備註外皆需填寫；完成後可一次列印三份文件</p>
+              <p>除客戶備註外皆需填寫</p>
             </section>
 
             <BookingDocumentUnifiedEdit {...sharedDocProps} />
@@ -570,32 +528,7 @@ export function WalkInBookingModal({
             ) : null}
           </form>
         )}
-
-        {printProps ? (
-          <div className="booking-doc-print-host" aria-hidden="true">
-            <div
-              ref={printRef}
-              className="booking-doc-print-area booking-doc-print-area--bundle"
-              data-print-title={`${created?.case_number || '案號'}_一式三份`}
-            >
-              <BookingDocumentPrintBundle {...printProps} />
-            </div>
-          </div>
-        ) : null}
       </div>
-      {docState && printProps ? (
-        <BookingDocumentStudioModal
-          open={studioOpen}
-          onClose={() => setStudioOpen(false)}
-          state={docState}
-          onChange={(next) => setDocState(applyDocumentFinancialSync(next))}
-          shopName={printProps.shopName}
-          shopFullName={printProps.shopFullName}
-          shopAddress={printProps.shopAddress}
-          shopPhone={printProps.shopPhone}
-          caseNumber={created?.case_number}
-        />
-      ) : null}
     </div>
   );
 }

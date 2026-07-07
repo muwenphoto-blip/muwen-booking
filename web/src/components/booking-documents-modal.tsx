@@ -1,10 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BookingDocumentUnifiedEdit, BookingDocumentFeeFooter } from '@/components/booking-document-edit-views';
-import { BookingDocumentPrintBundle } from '@/components/booking-document-print-bundle';
-import { printDocument } from '@/lib/admin/booking-document-export';
-import { BookingDocumentStudioModal } from '@/components/booking-document-studio-modal';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
@@ -28,10 +25,9 @@ export function BookingDocumentsModal({
   open,
   onClose,
 }: BookingDocumentsModalProps) {
-  const printRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState<'print' | 'download' | 'save' | null>(null);
+  const [busy, setBusy] = useState<'save' | null>(null);
   const [state, setState] = useState<BookingDocumentState | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [shopName, setShopName] = useState('沐紋映像');
@@ -43,7 +39,6 @@ export function BookingDocumentsModal({
   const [handlerOptions, setHandlerOptions] = useState<TeamHandlerOption[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
-  const [studioOpen, setStudioOpen] = useState(false);
 
   useEffect(() => {
     if (!open || !bookingId) return;
@@ -136,24 +131,6 @@ export function BookingDocumentsModal({
     }
   }
 
-  function handleOpenStudio() {
-    if (!state) return;
-    if (dirty && !window.confirm('尚有未儲存的變更，工作室會使用目前畫面內容；建議先按儲存。仍要繼續？')) {
-      return;
-    }
-    setStudioOpen(true);
-  }
-
-  function handlePrint() {
-    if (!printRef.current) return;
-    if (dirty && !window.confirm('尚有未儲存的變更，列印的是目前畫面內容；建議先按儲存。仍要繼續？')) {
-      return;
-    }
-    setBusy('print');
-    printDocument(printRef.current);
-    setBusy(null);
-  }
-
   const formComplete = useMemo(() => {
     if (!state || !services.length) return false;
     return isDocumentFormComplete(state, services);
@@ -177,37 +154,15 @@ export function BookingDocumentsModal({
       }
     : null;
 
-  const printProps = state
-    ? { state, shopName, shopFullName, shopAddress, shopPhone }
-    : null;
-
   const actionButtons = (
-    <>
-      <button
-        type="button"
-        className="admin-button"
-        disabled={!state || busy !== null || !dirty}
-        onClick={handleSave}
-      >
-        {busy === 'save' ? '儲存中…' : '儲存'}
-      </button>
-      <button
-        type="button"
-        className="admin-button secondary"
-        disabled={!state || busy !== null}
-        onClick={handlePrint}
-      >
-        {busy === 'print' ? '處理中…' : '列印'}
-      </button>
-      <button
-        type="button"
-        className="admin-button secondary"
-        disabled={!state || busy !== null}
-        onClick={handleOpenStudio}
-      >
-        下載
-      </button>
-    </>
+    <button
+      type="button"
+      className="admin-button"
+      disabled={!state || busy !== null || !dirty}
+      onClick={handleSave}
+    >
+      {busy === 'save' ? '儲存中…' : '儲存'}
+    </button>
   );
 
   return (
@@ -227,9 +182,7 @@ export function BookingDocumentsModal({
               {caseNumber ? <span className="booking-doc-case-badge">{caseNumber}</span> : null}
               {dirty ? <span className="booking-doc-dirty-badge">未儲存</span> : null}
             </div>
-            <p className="booking-doc-modal-sub">
-              填寫後請按儲存；下載會開啟文件工作室製作並輸出清晰 PDF
-            </p>
+            <p className="booking-doc-modal-sub">填寫後請按儲存</p>
           </div>
           <button type="button" className="admin-modal-close" onClick={requestClose} aria-label="關閉">
             ×
@@ -270,33 +223,7 @@ export function BookingDocumentsModal({
         ) : (
           <p className="admin-muted booking-doc-empty">無法顯示文件內容。</p>
         )}
-
-        {printProps ? (
-          <div className="booking-doc-print-host" aria-hidden="true">
-            <div
-              ref={printRef}
-              className="booking-doc-print-area booking-doc-print-area--bundle"
-              data-print-title={`${caseNumber || '案號'}_一式三份`}
-            >
-              <BookingDocumentPrintBundle {...printProps} />
-            </div>
-          </div>
-        ) : null}
       </div>
-      {state && printProps ? (
-        <BookingDocumentStudioModal
-          open={studioOpen}
-          onClose={() => setStudioOpen(false)}
-          state={state}
-          onChange={handleChange}
-          shopName={shopName}
-          shopFullName={shopFullName}
-          shopAddress={shopAddress}
-          shopPhone={shopPhone}
-          caseNumber={caseNumber}
-          dirty={dirty}
-        />
-      ) : null}
     </div>
   );
 }

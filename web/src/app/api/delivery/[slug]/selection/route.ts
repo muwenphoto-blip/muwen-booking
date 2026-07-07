@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DELIVERY_STORAGE_BUCKET } from '@/lib/delivery/constants';
 import { isSelectionOpen } from '@/lib/delivery/access';
+import { validateSelectionNote } from '@/lib/delivery/selection-export';
 import { getDeliveryGuestSession, loadDeliveryBySlug } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -28,6 +29,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const body = await request.json();
     const action = String(body.action || '').trim();
     const supabase = createAdminSupabaseClient();
+
+    if (action === 'setNote') {
+      const photoId = String(body.photoId || '');
+      const note = validateSelectionNote(String(body.note || ''));
+      const { data: photo, error: photoError } = await supabase
+        .from('delivery_photos')
+        .select('id, kind')
+        .eq('id', photoId)
+        .eq('delivery_id', delivery.id)
+        .eq('kind', 'preview')
+        .maybeSingle();
+      if (photoError) throw new Error(photoError.message);
+      if (!photo) throw new Error('找不到照片');
+
+      const { error: updateError } = await supabase
+        .from('delivery_photos')
+        .update({ selection_note: note })
+        .eq('id', photoId);
+      if (updateError) throw new Error(updateError.message);
+
+      return NextResponse.json({ ok: true, note });
+    }
 
     if (action === 'toggle') {
       const photoId = String(body.photoId || '');

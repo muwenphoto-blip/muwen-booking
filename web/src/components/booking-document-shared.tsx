@@ -52,6 +52,14 @@ export function parseAmount(value: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** 有單價但沒填數量時，預設以 1 計算（避免第二筆以後小計變成 0）。 */
+export function effectiveItemQuantity(quantity: string, price: string, discount = ''): number {
+  const qty = parseAmount(quantity);
+  if (qty > 0) return qty;
+  if (parseAmount(price) || parseAmount(discount)) return 1;
+  return 0;
+}
+
 export function formatAmount(value: number): string {
   if (!Number.isFinite(value) || value <= 0) return '';
   return Number.isInteger(value) ? String(value) : String(Math.round(value * 100) / 100);
@@ -61,7 +69,8 @@ export function formatAmount(value: number): string {
 export function calcItemRowTotal(price: string, discount: string, quantity: string): string {
   const hasInput = parseAmount(price) || parseAmount(discount) || parseAmount(quantity);
   if (!hasInput) return '';
-  const total = Math.max(0, parseAmount(price) * parseAmount(quantity) - parseAmount(discount));
+  const qty = effectiveItemQuantity(quantity, price, discount);
+  const total = Math.max(0, parseAmount(price) * qty - parseAmount(discount));
   return formatAmount(total) || '0';
 }
 
@@ -90,7 +99,7 @@ export function summarizeItemRows(rows: DocumentItemRow[]) {
 
   rows.forEach((row) => {
     if (!isItemRowFilled(row)) return;
-    const qty = parseAmount(row.quantity);
+    const qty = effectiveItemQuantity(row.quantity, row.price, row.discount);
     const price = parseAmount(row.price);
     subtotalQty += qty;
     subtotalAmount += price * qty;
