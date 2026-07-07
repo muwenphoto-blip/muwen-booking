@@ -91,6 +91,9 @@ function normalizeDocumentState(
   state.selectionTime = String(state.selectionTime || '');
   state.deliveryDate = state.deliveryDate || emptyDateParts();
   state.deliveryTime = String(state.deliveryTime || '');
+  state.usedAssetIds = Array.isArray(state.usedAssetIds)
+    ? state.usedAssetIds.map((id) => String(id || '').trim()).filter(Boolean)
+    : [];
   return migrateEmergencyContactFields(state);
 }
 

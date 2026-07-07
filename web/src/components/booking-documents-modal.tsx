@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BookingDocumentUnifiedEdit, BookingDocumentFeeFooter } from '@/components/booking-document-edit-views';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
 import type { AdminPromotionRow } from '@/lib/admin/promotions';
+import type { AssetOption } from '@/lib/admin/assets';
 import { syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
@@ -35,6 +36,7 @@ export function BookingDocumentsModal({
   const [state, setState] = useState<BookingDocumentState | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [promotions, setPromotions] = useState<AdminPromotionRow[]>([]);
+  const [assetOptions, setAssetOptions] = useState<AssetOption[]>([]);
   const [shopName, setShopName] = useState('沐紋映像');
   const [shopFullName, setShopFullName] = useState('沐紋映像攝影工作室');
   const [shopAddress, setShopAddress] = useState('');
@@ -73,6 +75,7 @@ export function BookingDocumentsModal({
         );
         setServices(data.services ?? []);
         setPromotions(data.promotions ?? []);
+        setAssetOptions(data.assets ?? []);
         setShopName(data.shopName || '沐紋映像');
         setShopFullName(data.shopFullName || '沐紋映像攝影工作室');
         setShopAddress(data.shopAddress || '');
@@ -175,6 +178,7 @@ export function BookingDocumentsModal({
         state,
         services,
         promotions,
+        assetOptions,
         shopName,
         shopFullName,
         shopAddress,

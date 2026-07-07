@@ -18,6 +18,7 @@ import {
 } from '@/lib/admin/booking-document-store';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
 import { loadAdminPromotions } from '@/lib/admin/promotions';
+import { loadActiveAssetOptions } from '@/lib/admin/assets';
 import { syncTransactionsFromDocument } from '@/lib/admin/finance';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canViewAllBookings } from '@/lib/admin/session';
@@ -47,7 +48,10 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const config = await loadBookingConfig();
-    const promotions = await loadAdminPromotions();
+    const [promotions, assets] = await Promise.all([
+      loadAdminPromotions(),
+      loadActiveAssetOptions(),
+    ]);
     const initial = applyDocumentFinancialSync(
       syncDocumentCatalogPricing(
         loadBookingDocumentState(
@@ -68,6 +72,7 @@ export async function GET(_request: Request, context: RouteContext) {
       shopPhone: SHOP_PHONE,
       services: config.services,
       promotions,
+      assets,
       documentColumnReady,
       documentSetupHint: documentColumnReady ? '' : DOCUMENT_DATA_SETUP_HINT,
       booking: {
@@ -124,6 +129,9 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         {
           ...body.document,
           caseNumber: booking.case_number || body.document.caseNumber || '',
+          usedAssetIds: Array.isArray(body.document.usedAssetIds)
+            ? body.document.usedAssetIds.map((id) => String(id || '').trim()).filter(Boolean)
+            : [],
         },
         config.services,
         promotions,

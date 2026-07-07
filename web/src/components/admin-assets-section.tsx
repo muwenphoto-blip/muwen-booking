@@ -177,8 +177,8 @@ export function AdminAssetsSection({ anchor, onSynced, onMessage, onError }: Adm
         <div>
           <h3>器材管理</h3>
           <p className="admin-muted">
-            登錄購入價與市場價，系統依 <strong>{monthKey}</strong> 案量（
-            {snapshot?.casesThisMonth ?? '—'} 件）自動計算折舊與本月損耗。
+            登錄購入價與市場價。預約文件／現場預約可勾選「使用器材」；有勾選時依各器材本月使用件數計算損耗，否則沿用總案量（
+            {snapshot?.casesThisMonth ?? '—'} 件）。
           </p>
         </div>
         <div className="admin-finance-head-actions">

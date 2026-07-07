@@ -19,6 +19,7 @@ import { ItemRowList, PaymentRowList, QuoteLineList } from '@/components/booking
 import { ScheduleDateTimeFields } from '@/components/booking-schedule-fields';
 import { FormField } from '@/components/form-field';
 import { ServiceOptionPicker } from '@/components/service-option-picker';
+import { DocumentEquipmentPicker } from '@/components/document-equipment-picker';
 
 function ServiceFields({
   state,
@@ -240,6 +241,14 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
     <div className="booking-doc-edit-form">
       <EditSection title="服務項目" hint="選擇後會帶入明細與三份輸出文件">
         <ServiceFields {...props} />
+      </EditSection>
+
+      <EditSection title="使用器材" hint="勾選本案實際使用的器材，供財務依案量計算損耗（可多選）">
+        <DocumentEquipmentPicker
+          state={state}
+          assetOptions={props.assetOptions ?? []}
+          onChange={onChange}
+        />
       </EditSection>
 
       <EditSection title="客戶資料" hint="除客戶備註、Line ID 外皆為必填">

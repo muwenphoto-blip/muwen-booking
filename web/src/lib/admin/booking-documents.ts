@@ -98,6 +98,8 @@ export type BookingDocumentState = {
   lineItems: DocumentLineItem[];
   itemRows: DocumentItemRow[];
   payments: DocumentPaymentRow[];
+  /** 本案使用之器材（對應 assets.id） */
+  usedAssetIds: string[];
 };
 
 export type BookingDocumentPayload = {
@@ -326,6 +328,7 @@ export function buildInitialDocumentState(input: {
     lineItems,
     itemRows,
     payments: emptyPayments(),
+    usedAssetIds: [],
   };
 }
 

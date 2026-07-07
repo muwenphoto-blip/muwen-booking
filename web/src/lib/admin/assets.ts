@@ -109,6 +109,51 @@ export function calculateAssetDepreciation(
   };
 }
 
+export type AssetOption = {
+  id: string;
+  name: string;
+};
+
+export async function loadActiveAssetOptions(): Promise<AssetOption[]> {
+  const assets = await loadAdminAssets();
+  return assets.filter((asset) => asset.active).map((asset) => ({ id: asset.id, name: asset.name }));
+}
+
+export async function loadAssetUsageForMonth(monthKey: string): Promise<{
+  counts: Map<string, number>;
+  anyTagged: boolean;
+  globalCases: number;
+}> {
+  const range = monthRange(monthKey);
+  const counts = new Map<string, number>();
+  if (!range) {
+    return { counts, anyTagged: false, globalCases: 0 };
+  }
+
+  const supabase = createAdminSupabaseClient();
+  const { data, error } = await supabase
+    .from('bookings')
+    .select('id, document_data')
+    .gte('booking_date', range.from)
+    .lte('booking_date', range.to)
+    .in('status', ACTIVE_CASE_STATUSES);
+  if (error) throw new Error(error.message);
+
+  let anyTagged = false;
+  for (const row of data ?? []) {
+    const document = row.document_data as { usedAssetIds?: string[] } | null;
+    const ids = Array.isArray(document?.usedAssetIds)
+      ? document.usedAssetIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
+    if (!ids.length) continue;
+    anyTagged = true;
+    ids.forEach((id) => counts.set(id, (counts.get(id) || 0) + 1));
+  }
+
+  const globalCases = await countCasesForMonth(monthKey);
+  return { counts, anyTagged, globalCases };
+}
+
 export async function countCasesForMonth(monthKey: string): Promise<number> {
   const range = monthRange(monthKey);
   if (!range) return 0;
@@ -147,18 +192,23 @@ export async function loadAssetsWithMetrics(monthKey: string): Promise<{
   totalMonthlyDepreciation: number;
   totalCurrentValue: number;
 }> {
-  const [assets, casesThisMonth] = await Promise.all([
+  const [assets, usage] = await Promise.all([
     loadAdminAssets(),
-    countCasesForMonth(monthKey),
+    loadAssetUsageForMonth(monthKey),
   ]);
 
   const range = monthRange(monthKey);
   const referenceDate = range ? parseIsoDate(range.to) : new Date();
 
-  const withMetrics = assets.map((asset) => ({
-    ...asset,
-    metrics: calculateAssetDepreciation(asset, casesThisMonth, referenceDate),
-  }));
+  const withMetrics = assets.map((asset) => {
+    const casesThisMonth = usage.anyTagged
+      ? usage.counts.get(asset.id) || 0
+      : usage.globalCases;
+    return {
+      ...asset,
+      metrics: calculateAssetDepreciation(asset, casesThisMonth, referenceDate),
+    };
+  });
 
   const activeAssets = withMetrics.filter((asset) => asset.active);
   const totalMonthlyDepreciation = activeAssets.reduce(
@@ -172,7 +222,7 @@ export async function loadAssetsWithMetrics(monthKey: string): Promise<{
 
   return {
     monthKey,
-    casesThisMonth,
+    casesThisMonth: usage.globalCases,
     assets: withMetrics,
     totalMonthlyDepreciation,
     totalCurrentValue,

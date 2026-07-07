@@ -5250,6 +5250,51 @@ body {
   margin-top: 4px;
 }
 
+.booking-doc-equipment-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.booking-doc-equipment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--booking-border);
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.booking-doc-equipment-chip input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--booking-primary);
+}
+
+.booking-doc-equipment-chip.selected {
+  border-color: var(--booking-primary);
+  background: #eff6ff;
+}
+
+.booking-doc-equipment-empty {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 480px) {
+  .booking-doc-equipment-chip {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
+    border-radius: 12px;
+  }
+}
+
 .admin-table tr.inactive-row {
   opacity: 0.65;
 }

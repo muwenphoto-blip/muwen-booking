@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BookingConfig, BookingSlot } from '@/lib/booking/types';
 import type { AdminPromotionRow } from '@/lib/admin/promotions';
+import type { AssetOption } from '@/lib/admin/assets';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE, syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
@@ -75,6 +76,7 @@ export function WalkInBookingModal({
   const [handlerOptions, setHandlerOptions] = useState<TeamHandlerOption[]>([]);
   const [defaultHandler, setDefaultHandler] = useState('');
   const [promotions, setPromotions] = useState<AdminPromotionRow[]>([]);
+  const [assetOptions, setAssetOptions] = useState<AssetOption[]>([]);
 
   const staffChoices = useMemo(() => {
     if (!config) return [];
@@ -98,10 +100,12 @@ export function WalkInBookingModal({
     Promise.all([
       fetch('/api/booking/config').then((res) => res.json()),
       fetch('/api/admin/settings/promotions').then((res) => res.json()),
+      fetch('/api/admin/assets/options').then((res) => res.json()),
     ])
-      .then(([data, promoData]) => {
+      .then(([data, promoData, assetData]) => {
         if (!data?.services) throw new Error('無法載入設定');
         setPromotions(promoData.promotions ?? []);
+        setAssetOptions(assetData.assets ?? []);
         setConfig(data);
         setHeadcount(data.headcountOptions[0]?.value ?? '');
         setGender(data.genderOptions[0]?.value ?? '');
@@ -333,6 +337,7 @@ export function WalkInBookingModal({
           state: docState,
           services: config.services,
           promotions,
+          assetOptions,
           shopName: config.shopName,
           shopFullName: SHOP_FULL_NAME,
           shopAddress: SHOP_ADDRESS,

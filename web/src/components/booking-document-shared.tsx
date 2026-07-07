@@ -9,6 +9,7 @@ import type {
 import { serviceOptionsFor } from '@/lib/admin/booking-documents';
 import { applyItemRowAutoDiscount } from '@/lib/admin/document-discount';
 import type { AdminPromotionRow } from '@/lib/admin/promotions';
+import type { AssetOption } from '@/lib/admin/assets';
 import type { ServiceItem } from '@/lib/booking/types';
 
 export type BookingDocumentSharedProps = {
@@ -24,6 +25,7 @@ export type BookingDocumentSharedProps = {
   onFieldBlur?: (fieldId: string) => void;
   formMode?: 'default' | 'walk-in';
   promotions?: AdminPromotionRow[];
+  assetOptions?: AssetOption[];
   handlerOptions?: { value: string; label: string }[];
   scheduleConfig?: {
     openTime: string;
