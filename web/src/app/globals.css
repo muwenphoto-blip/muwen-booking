@@ -2501,6 +2501,62 @@ body {
   word-break: break-word;
 }
 
+.admin-service-options-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-service-options-editor__head span {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.admin-service-options-editor__head p {
+  margin: 0;
+}
+
+.admin-service-options-editor__empty {
+  margin: 0;
+}
+
+.admin-service-options-editor__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-service-option-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid var(--booking-border);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.admin-service-option-row__remove {
+  align-self: end;
+  margin-bottom: 2px;
+}
+
+.admin-service-options-editor__add {
+  align-self: flex-start;
+}
+
+@media (max-width: 768px) {
+  .admin-service-option-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-service-option-row__remove {
+    width: 100%;
+  }
+}
+
 @media (max-width: 768px) {
   .admin-config-tab {
     flex: 1 1 calc(50% - 4px);

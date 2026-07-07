@@ -3,25 +3,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
-import type { AdminServiceRow, AdminSettingsData } from '@/lib/admin/settings';
+import { AdminServiceOptionsEditor } from '@/components/admin-service-options-editor';
+import type { AdminServiceRow, AdminSettingsData, ServiceOptionFormRow } from '@/lib/admin/settings';
+import { formRowsToOptionsText, serviceOptionsToFormRows } from '@/lib/admin/settings';
 
 type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'security';
 
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
-function serializeServiceOptions(options: AdminServiceRow['options']): string {
-  return options
-    .map((opt) => {
-      if (opt.price && opt.labelEn) return `${opt.label}|${opt.labelEn}|${opt.price}`;
-      if (opt.price) return `${opt.label}|${opt.price}`;
-      if (opt.labelEn) return `${opt.label}|${opt.labelEn}`;
-      return opt.label;
-    })
-    .join('\n');
-}
-
 function formatServicePrice(price: number | null): string {
   return price && price > 0 ? String(price) : '';
+}
+
+function validateServiceOptionRows(rows: ServiceOptionFormRow[]): string {
+  const filled = rows.filter((row) => row.label.trim());
+  if (!filled.length) return '';
+  const missing = filled.filter((row) => {
+    const price = parseInt(row.price, 10);
+    return !Number.isFinite(price) || price <= 0;
+  });
+  if (!missing.length) return '';
+  return `請為方案「${missing.map((row) => row.label.trim()).join('、')}」填寫金額`;
 }
 
 export function AdminSettingsPanel() {
@@ -48,12 +50,12 @@ export function AdminSettingsPanel() {
   const [newServiceName, setNewServiceName] = useState('');
   const [newServiceNameEn, setNewServiceNameEn] = useState('');
   const [newServiceBasePrice, setNewServiceBasePrice] = useState('');
-  const [newServiceOptions, setNewServiceOptions] = useState('');
+  const [newServiceOptionRows, setNewServiceOptionRows] = useState<ServiceOptionFormRow[]>([]);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editServiceName, setEditServiceName] = useState('');
   const [editServiceNameEn, setEditServiceNameEn] = useState('');
   const [editServiceBasePrice, setEditServiceBasePrice] = useState('');
-  const [editServiceOptions, setEditServiceOptions] = useState('');
+  const [editServiceOptionRows, setEditServiceOptionRows] = useState<ServiceOptionFormRow[]>([]);
   const [recoveryConfigured, setRecoveryConfigured] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
   const [recoveryConfirm, setRecoveryConfirm] = useState('');
@@ -154,6 +156,11 @@ export function AdminSettingsPanel() {
     setError('');
     setMessage('');
     try {
+      const optionError = validateServiceOptionRows(newServiceOptionRows);
+      if (optionError) throw new Error(optionError);
+      if (!newServiceOptionRows.length && !newServiceBasePrice.trim()) {
+        throw new Error('請填寫服務金額，或新增至少一個子方案並填寫金額');
+      }
       const res = await fetch('/api/admin/settings/services', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -161,7 +168,7 @@ export function AdminSettingsPanel() {
           name: newServiceName,
           nameEn: newServiceNameEn,
           basePrice: newServiceBasePrice,
-          optionsText: newServiceOptions,
+          optionsText: formRowsToOptionsText(newServiceOptionRows),
         }),
       });
       const data = await res.json();
@@ -170,7 +177,7 @@ export function AdminSettingsPanel() {
       setNewServiceName('');
       setNewServiceNameEn('');
       setNewServiceBasePrice('');
-      setNewServiceOptions('');
+      setNewServiceOptionRows([]);
       await loadSettings();
     } catch (err) {
       setError(err instanceof Error ? err.message : '新增失敗');
@@ -203,6 +210,11 @@ export function AdminSettingsPanel() {
     setSubmitting(true);
     setError('');
     try {
+      const optionError = validateServiceOptionRows(editServiceOptionRows);
+      if (optionError) throw new Error(optionError);
+      if (!editServiceOptionRows.length && !editServiceBasePrice.trim()) {
+        throw new Error('請填寫服務金額，或保留至少一個子方案並填寫金額');
+      }
       const res = await fetch(`/api/admin/settings/services/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -210,7 +222,7 @@ export function AdminSettingsPanel() {
           name: editServiceName,
           nameEn: editServiceNameEn,
           basePrice: editServiceBasePrice,
-          optionsText: editServiceOptions,
+          optionsText: formRowsToOptionsText(editServiceOptionRows),
         }),
       });
       const data = await res.json();
@@ -464,24 +476,24 @@ export function AdminSettingsPanel() {
                         />
                       </label>
                       <label className="admin-field">
-                        <span>預設金額（新台幣）</span>
+                        <span>服務金額（新台幣）</span>
                         <input
                           type="number"
                           min={0}
                           step={1}
                           value={editServiceBasePrice}
                           onChange={(e) => setEditServiceBasePrice(e.target.value)}
-                          placeholder="無子方案時使用"
+                          placeholder={editServiceOptionRows.length ? '僅無子方案時使用' : '例：800'}
+                          disabled={editServiceOptionRows.length > 0}
                         />
                       </label>
-                      <label className="admin-field">
-                        <span>方案選項（一行一個）</span>
-                        <textarea
-                          value={editServiceOptions}
-                          onChange={(e) => setEditServiceOptions(e.target.value)}
-                          placeholder="例：半身|Half Body|1200"
-                        />
-                      </label>
+                      <AdminServiceOptionsEditor
+                        rows={editServiceOptionRows}
+                        onChange={(rows) => {
+                          setEditServiceOptionRows(rows);
+                          if (rows.length) setEditServiceBasePrice('');
+                        }}
+                      />
                       <div className="admin-actions">
                         <button
                           type="button"
@@ -532,8 +544,10 @@ export function AdminSettingsPanel() {
                             setEditingServiceId(service.id);
                             setEditServiceName(service.name);
                             setEditServiceNameEn(service.name_en);
-                            setEditServiceBasePrice(formatServicePrice(service.base_price));
-                            setEditServiceOptions(serializeServiceOptions(service.options));
+                            setEditServiceBasePrice(
+                              service.options.length ? '' : formatServicePrice(service.base_price),
+                            );
+                            setEditServiceOptionRows(serviceOptionsToFormRows(service.options));
                           }}
                         >
                           編輯
@@ -589,24 +603,24 @@ export function AdminSettingsPanel() {
                 </label>
               </div>
               <label className="admin-field">
-                <span>預設金額（新台幣，選填）</span>
+                <span>服務金額（新台幣，選填）</span>
                 <input
                   type="number"
                   min={0}
                   step={1}
                   value={newServiceBasePrice}
                   onChange={(e) => setNewServiceBasePrice(e.target.value)}
-                  placeholder="無子方案時使用，例：800"
+                  placeholder={newServiceOptionRows.length ? '僅無子方案時使用' : '例：800'}
+                  disabled={newServiceOptionRows.length > 0}
                 />
               </label>
-              <label className="admin-field">
-                <span>方案選項（選填，一行一個）</span>
-                <textarea
-                  value={newServiceOptions}
-                  onChange={(e) => setNewServiceOptions(e.target.value)}
-                  placeholder="例：半身|Half Body|1200"
-                />
-              </label>
+              <AdminServiceOptionsEditor
+                rows={newServiceOptionRows}
+                onChange={(rows) => {
+                  setNewServiceOptionRows(rows);
+                  if (rows.length) setNewServiceBasePrice('');
+                }}
+              />
               <button type="submit" className="admin-button" disabled={submitting}>
                 新增服務
               </button>

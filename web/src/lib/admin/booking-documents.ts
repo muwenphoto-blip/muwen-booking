@@ -318,11 +318,13 @@ export function resolveServiceItemPrice(
 ): string {
   const item = services.find((s) => s.name === serviceName);
   if (!item) return '';
+  const hasOptions = item.options.length > 0;
   if (serviceOption) {
     const opt = item.options.find((o) => o.value === serviceOption);
     if (opt?.price && opt.price > 0) return String(opt.price);
+    if (hasOptions) return '';
   }
-  if (item.basePrice && item.basePrice > 0) return String(item.basePrice);
+  if (!hasOptions && item.basePrice && item.basePrice > 0) return String(item.basePrice);
   return '';
 }
 

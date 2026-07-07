@@ -128,6 +128,47 @@ export function parseServiceOptionsText(
     .filter((item) => item.label);
 }
 
+export function serializeServiceOptionsText(
+  options: { label: string; labelEn: string; price?: number }[],
+): string {
+  return options
+    .map((opt) => {
+      if (opt.labelEn && opt.price) return `${opt.label}|${opt.labelEn}|${opt.price}`;
+      if (opt.price) return `${opt.label}|${opt.price}`;
+      if (opt.labelEn) return `${opt.label}|${opt.labelEn}`;
+      return opt.label;
+    })
+    .join('\n');
+}
+
+export type ServiceOptionFormRow = { label: string; labelEn: string; price: string };
+
+export function serviceOptionsToFormRows(
+  options: { label: string; labelEn: string; price?: number }[],
+): ServiceOptionFormRow[] {
+  return options.map((opt) => ({
+    label: opt.label,
+    labelEn: opt.labelEn,
+    price: opt.price && opt.price > 0 ? String(opt.price) : '',
+  }));
+}
+
+export function formRowsToOptionsText(rows: ServiceOptionFormRow[]): string {
+  const options = rows
+    .map((row) => ({
+      label: row.label.trim(),
+      labelEn: row.labelEn.trim(),
+      price: parseInt(row.price, 10),
+    }))
+    .filter((row) => row.label)
+    .map((row) => ({
+      label: row.label,
+      labelEn: row.labelEn,
+      ...(Number.isFinite(row.price) && row.price > 0 ? { price: row.price } : {}),
+    }));
+  return serializeServiceOptionsText(options);
+}
+
 function serializeServiceOptionsForDb(
   options: { label: string; labelEn: string; price?: number }[],
 ): { label: string; labelEn: string; price?: number }[] {
