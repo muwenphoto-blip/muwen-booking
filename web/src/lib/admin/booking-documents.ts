@@ -328,12 +328,37 @@ export function resolveServiceItemPrice(
   return '';
 }
 
+function clearPrimaryItemPricing(state: BookingDocumentState): BookingDocumentState {
+  const itemRows = [...state.itemRows];
+  if (itemRows[0]) {
+    itemRows[0] = {
+      ...itemRows[0],
+      price: '',
+      discount: '',
+      quantity: '',
+      itemTotal: '',
+    };
+  }
+
+  const lineItems = [...state.lineItems];
+  if (lineItems[0]) {
+    lineItems[0] = {
+      ...lineItems[0],
+      unitPrice: '',
+      quantity: '',
+      amount: '',
+    };
+  }
+
+  return { ...state, itemRows, lineItems };
+}
+
 function applyCatalogPriceToDocument(
   state: BookingDocumentState,
   services: ServiceItem[],
 ): BookingDocumentState {
   const price = resolveServiceItemPrice(services, state.service, state.serviceOption);
-  if (!price) return state;
+  if (!price) return clearPrimaryItemPricing(state);
 
   const itemRows = [...state.itemRows];
   if (itemRows[0]) {
@@ -364,6 +389,13 @@ function applyCatalogPriceToDocument(
   return { ...state, itemRows, lineItems };
 }
 
+export function syncDocumentCatalogPricing(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): BookingDocumentState {
+  return applyCatalogPriceToDocument(state, services);
+}
+
 export function syncServiceChange(
   state: BookingDocumentState,
   serviceName: string,
@@ -386,6 +418,10 @@ export function syncServiceChange(
       ...itemRows[0],
       serviceContent: serviceName,
       packageChoice: serviceOption,
+      price: '',
+      discount: '',
+      quantity: '',
+      itemTotal: '',
     };
   }
 

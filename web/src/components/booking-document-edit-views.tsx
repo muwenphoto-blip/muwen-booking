@@ -122,10 +122,10 @@ function CustomerFields({ state, onChange }: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentFeeFooter(props: BookingDocumentSharedProps) {
-  const { state, onChange } = props;
-  const { subtotalQty, subtotalAmount, grandTotal } = summarizeItemRows(state.itemRows);
-  const documentTotal = getDocumentGrandTotal(state);
-  const balanceDue = getBalanceDue(state);
+  const { state, onChange, services } = props;
+  const { subtotalQty, subtotalAmount, grandTotal } = summarizeItemRows(state.itemRows, services);
+  const documentTotal = getDocumentGrandTotal(state, services);
+  const balanceDue = getBalanceDue(state, services);
   const hasFeeDetails = Boolean(
     state.additionalAmount.trim() || state.deposit.trim() || state.additionalItems.trim(),
   );
@@ -196,15 +196,15 @@ export function BookingDocumentFeeFooter(props: BookingDocumentSharedProps) {
           <div className="booking-doc-edit-summary booking-doc-edit-summary--footer">
             <div>
               <span>小計數量</span>
-              <strong>{subtotalQty || '—'}</strong>
+              <strong>{subtotalQty}</strong>
             </div>
             <div>
               <span>小計金額</span>
-              <strong>{subtotalAmount || '—'}</strong>
+              <strong>{subtotalAmount}</strong>
             </div>
             <div>
               <span>應收總額</span>
-              <strong>{documentTotal || grandTotal || '—'}</strong>
+              <strong>{documentTotal || grandTotal}</strong>
             </div>
           </div>
         </div>
@@ -556,8 +556,8 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentQuoteEdit(props: BookingDocumentSharedProps) {
-  const { state, onChange } = props;
-  const grandTotal = getDocumentGrandTotal(state);
+  const { state, onChange, services } = props;
+  const grandTotal = getDocumentGrandTotal(state, services);
 
   return (
     <div className="booking-doc-edit-form">
@@ -606,9 +606,9 @@ export function BookingDocumentQuoteEdit(props: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentItemsEdit(props: BookingDocumentSharedProps) {
-  const { state, onChange } = props;
-  const { subtotalQty, subtotalAmount, grandTotal } = summarizeItemRows(state.itemRows);
-  const documentTotal = getDocumentGrandTotal(state);
+  const { state, onChange, services } = props;
+  const { subtotalQty, subtotalAmount, grandTotal } = summarizeItemRows(state.itemRows, services);
+  const documentTotal = getDocumentGrandTotal(state, services);
 
   return (
     <div className="booking-doc-edit-form">
@@ -690,10 +690,10 @@ export function BookingDocumentItemsEdit(props: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentContractEdit(props: BookingDocumentSharedProps) {
-  const { state, onChange, scheduleConfig } = props;
-  const { grandTotal } = summarizeItemRows(state.itemRows);
-  const documentTotal = getDocumentGrandTotal(state);
-  const balanceDue = getBalanceDue(state);
+  const { state, onChange, scheduleConfig, services } = props;
+  const { grandTotal } = summarizeItemRows(state.itemRows, services);
+  const documentTotal = getDocumentGrandTotal(state, services);
+  const balanceDue = getBalanceDue(state, services);
 
   function updateShootingSchedule(next: { shootingDate: typeof state.shootingDate; shootingTime: string }) {
     onChange({

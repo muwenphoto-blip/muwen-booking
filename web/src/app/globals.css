@@ -2477,10 +2477,63 @@ body {
 }
 
 .admin-service-item {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
   border: 1px solid var(--booking-border);
   border-radius: 14px;
   padding: 14px;
   background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.admin-service-item.is-dragging {
+  opacity: 0.55;
+}
+
+.admin-service-item.is-drag-over {
+  border-color: var(--booking-primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.admin-service-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-service-drag-handle {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 36px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--booking-border);
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1;
+  cursor: grab;
+  touch-action: none;
+}
+
+.admin-service-drag-handle:hover {
+  border-color: #cbd5e1;
+  color: #334155;
+  background: #fff;
+}
+
+.admin-service-drag-handle:active {
+  cursor: grabbing;
+}
+
+.admin-service-drag-handle:focus-visible {
+  outline: 2px solid var(--booking-primary);
+  outline-offset: 2px;
 }
 
 .admin-service-item.inactive {

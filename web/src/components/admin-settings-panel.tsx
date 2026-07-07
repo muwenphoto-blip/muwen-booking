@@ -7,6 +7,7 @@ import { AdminServiceOptionsEditor } from '@/components/admin-service-options-ed
 import type { AdminServiceRow, AdminSettingsData, ServiceOptionFormRow } from '@/lib/admin/settings';
 import { formRowsToOptionsText, serviceOptionsToFormRows } from '@/lib/admin/settings';
 import { autoFillGenderOptionsText, suggestEnglishUnlessTouched } from '@/lib/admin/chinese-english-label';
+import { reorderListById } from '@/lib/admin/reorder-list';
 
 type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'security';
 
@@ -59,6 +60,9 @@ export function AdminSettingsPanel() {
   const [editServiceOptionRows, setEditServiceOptionRows] = useState<ServiceOptionFormRow[]>([]);
   const [editServiceNameEnTouched, setEditServiceNameEnTouched] = useState(false);
   const [newServiceNameEnTouched, setNewServiceNameEnTouched] = useState(false);
+  const [draggingServiceId, setDraggingServiceId] = useState<string | null>(null);
+  const [dragOverServiceId, setDragOverServiceId] = useState<string | null>(null);
+  const [reorderingServices, setReorderingServices] = useState(false);
   const [recoveryConfigured, setRecoveryConfigured] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
   const [recoveryConfirm, setRecoveryConfirm] = useState('');
@@ -258,6 +262,38 @@ export function AdminSettingsPanel() {
     }
   }
 
+  async function persistServiceOrder(nextServices: AdminServiceRow[]) {
+    const previous = services;
+    setServices(nextServices);
+    setReorderingServices(true);
+    setError('');
+    try {
+      const res = await fetch('/api/admin/settings/services/reorder', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: nextServices.map((service) => service.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '排序儲存失敗');
+      setMessage(data.message || '服務排序已更新');
+    } catch (err) {
+      setServices(previous);
+      setError(err instanceof Error ? err.message : '排序儲存失敗');
+    } finally {
+      setReorderingServices(false);
+    }
+  }
+
+  function handleServiceDrop(targetId: string, sourceId: string | null) {
+    if (!sourceId || sourceId === targetId || editingServiceId) return;
+    const next = reorderListById(services, sourceId, targetId);
+    if (next === services) return;
+    void persistServiceOrder(next);
+  }
+
+  const canReorderServices =
+    services.length > 1 && !editingServiceId && !submitting && !reorderingServices;
+
   if (loading) {
     return (
       <AdminShell>
@@ -455,13 +491,63 @@ export function AdminSettingsPanel() {
 
         {tab === 'services' ? (
           <div className="admin-form-box">
-            <p className="admin-muted">管理客人可選的服務項目。</p>
+            <p className="admin-muted">
+              管理客人可選的服務項目。{canReorderServices ? '拖曳左側把手可調整顯示順序。' : ''}
+            </p>
             <div className="admin-service-list">
               {services.map((service) => (
                 <article
                   key={service.id}
-                  className={['admin-service-item', service.active ? '' : 'inactive'].join(' ')}
+                  className={[
+                    'admin-service-item',
+                    service.active ? '' : 'inactive',
+                    draggingServiceId === service.id ? 'is-dragging' : '',
+                    dragOverServiceId === service.id ? 'is-drag-over' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  onDragOver={(event) => {
+                    if (!canReorderServices || !draggingServiceId || draggingServiceId === service.id) {
+                      return;
+                    }
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDragOverServiceId(service.id);
+                  }}
+                  onDragLeave={(event) => {
+                    const related = event.relatedTarget as Node | null;
+                    if (related && event.currentTarget.contains(related)) return;
+                    if (dragOverServiceId === service.id) setDragOverServiceId(null);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceId =
+                      event.dataTransfer.getData('text/plain') || draggingServiceId || '';
+                    handleServiceDrop(service.id, sourceId);
+                    setDraggingServiceId(null);
+                    setDragOverServiceId(null);
+                  }}
                 >
+                  {editingServiceId !== service.id && canReorderServices ? (
+                    <button
+                      type="button"
+                      className="admin-service-drag-handle"
+                      draggable
+                      aria-label={`拖曳調整「${service.name}」順序`}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = 'move';
+                        event.dataTransfer.setData('text/plain', service.id);
+                        setDraggingServiceId(service.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingServiceId(null);
+                        setDragOverServiceId(null);
+                      }}
+                    >
+                      <span aria-hidden="true">⋮⋮</span>
+                    </button>
+                  ) : null}
+                  <div className="admin-service-item__body">
                   {editingServiceId === service.id ? (
                     <div className="admin-form">
                       <label className="admin-field">
@@ -590,6 +676,7 @@ export function AdminSettingsPanel() {
                       </div>
                     </>
                   )}
+                  </div>
                 </article>
               ))}
             </div>

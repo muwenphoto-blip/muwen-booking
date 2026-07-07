@@ -70,8 +70,8 @@ type ItemRowListProps = BookingDocumentSharedProps;
 
 export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
   const filledIndices = useMemo(
-    () => state.itemRows.map((row, i) => (isItemRowFilled(row) ? i : -1)).filter((i) => i >= 0),
-    [state.itemRows],
+    () => state.itemRows.map((row, i) => (isItemRowFilled(row, services) ? i : -1)).filter((i) => i >= 0),
+    [state.itemRows, services],
   );
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draftIndex, setDraftIndex] = useState<number | null>(null);
@@ -81,10 +81,10 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
     setDraftIndex(null);
   }, [state.caseNumber]);
 
-  const canAdd = findFirstEmptyIndex(state.itemRows, isItemRowFilled) >= 0;
+  const canAdd = findFirstEmptyIndex(state.itemRows, (row) => isItemRowFilled(row, services)) >= 0;
 
   function startAdd() {
-    const index = findFirstEmptyIndex(state.itemRows, isItemRowFilled);
+    const index = findFirstEmptyIndex(state.itemRows, (row) => isItemRowFilled(row, services));
     if (index >= state.itemRows.length) return;
     setDraftIndex(index);
     setEditingIndex(index);
@@ -92,7 +92,7 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
 
   function finishEdit(index: number) {
     const row = state.itemRows[index];
-    if (!isItemRowFilled(row)) return;
+    if (!isItemRowFilled(row, services)) return;
     if ((parseAmount(row.price) || parseAmount(row.discount)) && !String(row.quantity || '').trim()) {
       onChange(
         updateItemRowWithCalc(state, index, {
@@ -218,7 +218,7 @@ function ItemRowEditor({
   onDone: () => void;
   onCancel: () => void;
 }) {
-  const canDone = isItemRowFilled(row);
+  const canDone = isItemRowFilled(row, services);
   const packageOptions = serviceOptionsFor(row.serviceContent, services);
 
   return (

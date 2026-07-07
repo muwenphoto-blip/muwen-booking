@@ -6,6 +6,8 @@ import type {
   DocumentLineItem,
   DocumentPaymentRow,
 } from '@/lib/admin/booking-documents';
+import { serviceOptionsFor } from '@/lib/admin/booking-documents';
+import type { ServiceItem } from '@/lib/booking/types';
 
 export type BookingDocumentSharedProps = {
   state: BookingDocumentState;
@@ -89,24 +91,25 @@ export function getItemRowTotal(row: DocumentItemRow): number {
   return parseAmount(row.itemTotal);
 }
 
-export function isItemRowFilled(row: DocumentItemRow): boolean {
-  return Boolean(
-    row.serviceContent ||
-      row.packageChoice ||
-      row.price ||
-      row.discount ||
-      row.itemTotal ||
-      row.quantity,
-  );
+export function isItemRowFilled(row: DocumentItemRow, services?: ServiceItem[]): boolean {
+  const hasPricing = Boolean(row.price || row.discount || row.itemTotal || row.quantity);
+  if (row.serviceContent && services?.length) {
+    const needsOption = serviceOptionsFor(row.serviceContent, services).length > 0;
+    if (needsOption) {
+      return Boolean(String(row.packageChoice || '').trim()) || hasPricing;
+    }
+  }
+
+  return Boolean(row.serviceContent || row.packageChoice || hasPricing);
 }
 
-export function summarizeItemRows(rows: DocumentItemRow[]) {
+export function summarizeItemRows(rows: DocumentItemRow[], services: ServiceItem[] = []) {
   let subtotalQty = 0;
   let subtotalAmount = 0;
   let grandTotal = 0;
 
   rows.forEach((row) => {
-    if (!isItemRowFilled(row)) return;
+    if (!isItemRowFilled(row, services)) return;
     const qty = effectiveItemQuantity(row.quantity, row.price, row.discount);
     const price = parseAmount(row.price);
     subtotalQty += qty;
@@ -130,15 +133,18 @@ function itemRowToLineItem(row: DocumentItemRow): Partial<DocumentLineItem> {
 }
 
 /** 項目表為金額主來源，同步估價單明細與合約／估價總額 */
-export function applyDocumentFinancialSync(state: BookingDocumentState): BookingDocumentState {
-  const { grandTotal } = summarizeItemRows(state.itemRows);
+export function applyDocumentFinancialSync(
+  state: BookingDocumentState,
+  services: ServiceItem[] = [],
+): BookingDocumentState {
+  const { grandTotal } = summarizeItemRows(state.itemRows, services);
   const fullTotal = grandTotal + parseAmount(state.additionalAmount);
   const totalStr = formatAmount(fullTotal);
   const amountStr = formatAmount(grandTotal);
 
   const lineItems = state.lineItems.map((line, index) => {
     const item = state.itemRows[index];
-    if (!item || !isItemRowFilled(item)) return line;
+    if (!item || !isItemRowFilled(item, services)) return line;
     return { ...line, ...itemRowToLineItem(item) };
   });
 
@@ -150,22 +156,23 @@ export function applyDocumentFinancialSync(state: BookingDocumentState): Booking
   };
 }
 
-export function getDocumentGrandTotal(state: BookingDocumentState): number {
-  const { grandTotal } = summarizeItemRows(state.itemRows);
+export function getDocumentGrandTotal(state: BookingDocumentState, services: ServiceItem[] = []): number {
+  const { grandTotal } = summarizeItemRows(state.itemRows, services);
   return grandTotal + parseAmount(state.additionalAmount);
 }
 
 /** 合約尾款 = 應收總額 − 訂金 */
-export function getBalanceDue(state: BookingDocumentState): number {
-  return Math.max(0, getDocumentGrandTotal(state) - parseAmount(state.deposit));
+export function getBalanceDue(state: BookingDocumentState, services: ServiceItem[] = []): number {
+  return Math.max(0, getDocumentGrandTotal(state, services) - parseAmount(state.deposit));
 }
 
 export function patchDocumentState(
   state: BookingDocumentState,
   patch: BookingDocumentState | ((prev: BookingDocumentState) => BookingDocumentState),
+  services: ServiceItem[] = [],
 ): BookingDocumentState {
   const next = typeof patch === 'function' ? patch(state) : patch;
-  return applyDocumentFinancialSync(next);
+  return applyDocumentFinancialSync(next, services);
 }
 
 export function updateItemRow(

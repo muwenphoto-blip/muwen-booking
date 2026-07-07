@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BookingDocumentUnifiedEdit, BookingDocumentFeeFooter } from '@/components/booking-document-edit-views';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
+import { syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import { clearFieldError } from '@/lib/form-validation';
@@ -62,7 +63,12 @@ export function BookingDocumentsModal({
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '無法載入文件');
-        setState(applyDocumentFinancialSync(data.initial));
+        setState(
+          applyDocumentFinancialSync(
+            syncDocumentCatalogPricing(data.initial, data.services ?? []),
+            data.services ?? [],
+          ),
+        );
         setServices(data.services ?? []);
         setShopName(data.shopName || '沐紋映像');
         setShopFullName(data.shopFullName || '沐紋映像攝影工作室');
@@ -93,7 +99,10 @@ export function BookingDocumentsModal({
   }, [open]);
 
   function handleChange(next: BookingDocumentState) {
-    const synced = applyDocumentFinancialSync(next);
+    const synced = applyDocumentFinancialSync(
+      syncDocumentCatalogPricing(next, services),
+      services,
+    );
     setState(synced);
     setDirty(true);
     setSaveMessage('');

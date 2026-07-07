@@ -16,6 +16,7 @@ import {
   serializeBookingDocumentState,
 } from '@/lib/admin/booking-document-store';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
+import { syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canViewAllBookings } from '@/lib/admin/session';
 import { loadBookingConfig } from '@/lib/booking/config';
@@ -45,11 +46,15 @@ export async function GET(_request: Request, context: RouteContext) {
 
     const config = await loadBookingConfig();
     const initial = applyDocumentFinancialSync(
-      loadBookingDocumentState(
-        booking,
+      syncDocumentCatalogPricing(
+        loadBookingDocumentState(
+          booking,
+          config.services,
+          canViewAllBookings(session.role) ? '' : session.photographerName || session.account,
+        ),
         config.services,
-        canViewAllBookings(session.role) ? '' : session.photographerName || session.account,
       ),
+      config.services,
     );
 
     return NextResponse.json({
@@ -107,10 +112,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       }
     }
 
-    const document = applyDocumentFinancialSync({
-      ...body.document,
-      caseNumber: booking.case_number || body.document.caseNumber || '',
-    });
+    const config = await loadBookingConfig();
+    const document = applyDocumentFinancialSync(
+      syncDocumentCatalogPricing(
+        {
+          ...body.document,
+          caseNumber: booking.case_number || body.document.caseNumber || '',
+        },
+        config.services,
+      ),
+      config.services,
+    );
 
     const shootingDate = formatDatePartsToIso(document.shootingDate);
     const shootingTime = String(document.shootingTime || '').trim();

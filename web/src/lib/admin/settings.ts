@@ -508,6 +508,35 @@ export async function toggleAdminService(
   };
 }
 
+export async function reorderAdminServices(
+  session: { account: string; role: string },
+  orderedIds: string[],
+) {
+  const ids = orderedIds.map((id) => String(id || '').trim()).filter(Boolean);
+  if (!ids.length) throw new Error('請提供服務排序');
+
+  const supabase = createAdminSupabaseClient();
+  const { data: existing, error: fetchError } = await supabase.from('services').select('id');
+  if (fetchError) throw new Error(fetchError.message);
+
+  const existingIds = new Set((existing || []).map((row) => row.id));
+  if (ids.length !== existingIds.size || ids.some((id) => !existingIds.has(id))) {
+    throw new Error('服務清單已變更，請重新整理後再試');
+  }
+
+  for (let index = 0; index < ids.length; index += 1) {
+    const { error } = await supabase
+      .from('services')
+      .update({ sort_order: index + 1 })
+      .eq('id', ids[index]);
+    if (error) throw new Error(error.message);
+  }
+
+  clearBookingConfigCache();
+  await logSettingsChange(session, '調整服務排序', `${ids.length} 項`, '');
+  return { message: '服務排序已更新' };
+}
+
 export async function deleteAdminService(session: { account: string; role: string }, id: string) {
   const supabase = createAdminSupabaseClient();
   const { data: row, error: fetchError } = await supabase

@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BookingConfig, BookingSlot } from '@/lib/booking/types';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
-import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE } from '@/lib/admin/booking-documents';
+import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE, syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
+import type { ServiceItem } from '@/lib/booking/types';
 import {
   applyBookingSlotToDocument,
   buildEmptyWalkInDocument,
@@ -22,6 +23,10 @@ import {
   generateSlots,
   getDayOfWeek,
 } from '@/lib/booking/time';
+
+function syncWalkInDocument(state: BookingDocumentState, services: ServiceItem[]) {
+  return applyDocumentFinancialSync(syncDocumentCatalogPricing(state, services), services);
+}
 
 type WalkInBookingModalProps = {
   open: boolean;
@@ -104,7 +109,7 @@ export function WalkInBookingModal({
         const today = new Date();
         const initialDate = findNextOpenDate(today, data.openDays);
         setDate(initialDate);
-        setDocState(applyDocumentFinancialSync(buildEmptyWalkInDocument(data.services ?? [])));
+        setDocState(syncWalkInDocument(buildEmptyWalkInDocument(data.services ?? []), data.services ?? []));
       })
       .catch((err) => {
         setLoadError(err instanceof Error ? err.message : '無法載入設定');
@@ -159,13 +164,14 @@ export function WalkInBookingModal({
   useEffect(() => {
     if (!docState || !date || !staff || !selectedTime) return;
     setDocState((prev) =>
-      prev
-        ? applyDocumentFinancialSync(
+      prev && config
+        ? syncWalkInDocument(
             applyBookingSlotToDocument(prev, { date, time: selectedTime, staff }),
+            config.services,
           )
         : prev,
     );
-  }, [date, staff, selectedTime]);
+  }, [config, date, staff, selectedTime]);
 
   const isShopClosed = useMemo(() => {
     if (!config || !date) return false;
@@ -221,10 +227,13 @@ export function WalkInBookingModal({
     setError('');
     if (config) {
       setDocState(
-        applyDocumentFinancialSync({
-          ...buildEmptyWalkInDocument(config.services),
-          handler: defaultHandler,
-        }),
+        syncWalkInDocument(
+          {
+            ...buildEmptyWalkInDocument(config.services),
+            handler: defaultHandler,
+          },
+          config.services,
+        ),
       );
     }
     setFieldErrors({});
@@ -273,8 +282,9 @@ export function WalkInBookingModal({
 
     setSubmitting(true);
     try {
-      const document = applyDocumentFinancialSync(
+      const document = syncWalkInDocument(
         applyBookingSlotToDocument(docState, { date, time: selectedTime, staff }),
+        config.services,
       );
       const res = await fetch('/api/admin/bookings', {
         method: 'POST',
@@ -315,7 +325,7 @@ export function WalkInBookingModal({
           shopAddress: SHOP_ADDRESS,
           shopPhone: SHOP_PHONE,
           onChange: (next: BookingDocumentState) =>
-            setDocState(applyDocumentFinancialSync(next)),
+            setDocState(syncWalkInDocument(next, config.services)),
           fieldErrors,
           onFieldTouch: touchField,
           onFieldBlur: blurField,
