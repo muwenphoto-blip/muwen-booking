@@ -12,23 +12,26 @@ export function calculateRuleDiscount(row: DocumentItemRow): number {
   const mode = normalizeDiscountMode(row.discountMode);
   const qty = effectiveItemQuantity(row.quantity, row.price, row.discount);
   const unitPrice = parseAmount(row.price);
+  const lineMax = Math.max(0, unitPrice * qty);
+
+  let discount = 0;
 
   if (mode === 'per_extra') {
     const basePeople = Math.max(0, parseAmount(row.discountBasePeople || ''));
     const perExtra = parseAmount(row.discountPerExtra || '');
     const extraPeople = Math.max(0, qty - basePeople);
-    return extraPeople * perExtra;
-  }
-
-  if (mode === 'group_free') {
+    discount = extraPeople * perExtra;
+  } else if (mode === 'group_free') {
     const groupPay = Math.max(1, parseAmount(row.discountGroupPay || '') || 1);
     const groupFree = Math.max(1, parseAmount(row.discountGroupFree || '') || 1);
     const bundleSize = groupPay + groupFree;
     const freePeople = Math.floor(qty / bundleSize) * groupFree;
-    return freePeople * unitPrice;
+    discount = freePeople * unitPrice;
+  } else {
+    discount = parseAmount(row.discount);
   }
 
-  return parseAmount(row.discount);
+  return Math.min(Math.max(0, discount), lineMax);
 }
 
 export function applyItemRowAutoDiscount(row: DocumentItemRow): DocumentItemRow {

@@ -100,7 +100,7 @@ console.log('1. 關閉所有 terminal 裡的 npm run dev');
 console.log('2. cd web && npm run dev:clean');
 console.log('3. 瀏覽器開 http://localhost:3000/admin/schedule');
 console.log('4. 若結案失敗（bookings_status_check），執行 supabase/booking-closed-status.sql');
-console.log('5. 財務模組請執行 supabase/transactions.sql、assets.sql、promotions.sql');
+console.log('5. 財務模組請執行 supabase/transactions.sql、assets.sql、promotions.sql、promotions-date-check.sql');
 console.log('6. 安全加固請執行 supabase/rls-security-hardening.sql');
 
 const failed = lines.filter((line) => line.startsWith('✗')).length;

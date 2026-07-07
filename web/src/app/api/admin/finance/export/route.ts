@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     const report = await loadFinanceAccountingReport(safePeriod, anchor || defaultAnchor);
     const csv = buildFinanceReportCsv(report, safeKind);
-    const filename = financeReportFilename(report, safeKind);
+    const filename = financeReportFilename(report);
 
     return new NextResponse(csv, {
       headers: {

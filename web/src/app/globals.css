@@ -5000,6 +5000,68 @@ body {
     margin-left: 0;
     justify-content: space-between;
   }
+
+  .admin-finance-category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-finance-accounting {
+    padding: 12px;
+  }
+
+  .admin-finance-pl-row {
+    grid-template-columns: 1fr auto;
+    gap: 4px 10px;
+  }
+
+  .admin-finance-pl-row em {
+    grid-column: 1 / -1;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-finance-tx-table {
+    display: none;
+  }
+
+  .admin-finance-tx-cards {
+    display: grid;
+    gap: 10px;
+  }
+
+  .admin-section-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-finance-cashflow-badge {
+    padding: 12px 14px;
+  }
+
+  .admin-finance-cashflow-badge strong,
+  .admin-finance-cashflow-badge span {
+    font-size: 1rem;
+  }
+
+  .admin-finance-period-nav {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-finance-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-finance-head-actions .admin-button {
+    flex: 1 1 calc(50% - 4px);
+    justify-content: center;
+    min-width: 0;
+    font-size: 0.84rem;
+    padding-inline: 10px;
+  }
 }
 
 .admin-finance-accounting {
@@ -5142,6 +5204,42 @@ body {
 .admin-finance-performance-total td {
   border-top: 2px solid var(--booking-border);
   background: #f8fafc;
+}
+
+.admin-finance-tx-cards {
+  display: none;
+}
+
+.admin-finance-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.admin-finance-tx-card {
+  padding: 12px 14px;
+  border: 1px solid var(--booking-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.admin-finance-tx-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.admin-finance-tx-card p {
+  margin: 0 0 4px;
+  font-size: 0.88rem;
+  color: var(--booking-muted);
 }
 
 .admin-finance-view-nav {

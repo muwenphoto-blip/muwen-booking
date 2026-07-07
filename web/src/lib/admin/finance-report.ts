@@ -116,16 +116,18 @@ export function buildFinanceAccountingReport(
 export async function loadFinanceAccountingReport(
   period: FinancePeriod,
   anchor: string,
+  options?: { transactionLimit?: number },
 ): Promise<FinanceAccountingReport> {
   const range = getFinancePeriodRange(period, anchor);
   const monthKey = monthKeyFromIsoDate(range.from);
+  const txLimit = options?.transactionLimit ?? 5000;
   const assets = await loadAdminAssets();
   if (assets.length) {
     await syncMonthDepreciationFromAssets(monthKey);
   }
   const [summary, transactions, equipmentDepreciation, performance] = await Promise.all([
     loadFinanceSummary(period, anchor),
-    loadFinanceTransactions({ from: range.from, to: range.to, limit: 5000 }),
+    loadFinanceTransactions({ from: range.from, to: range.to, limit: txLimit }),
     loadEquipmentDepreciation(monthKey),
     loadFinancePerformance(range.from, range.to),
   ]);
@@ -367,9 +369,6 @@ export function buildFinanceReportCsv(
   return buildFinanceFullReportCsv(report);
 }
 
-export function financeReportFilename(
-  report: FinanceAccountingReport,
-  _kind: FinanceReportKind,
-): string {
+export function financeReportFilename(report: FinanceAccountingReport): string {
   return `${periodFileToken(report)}.csv`;
 }

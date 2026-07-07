@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
 import { DeliveryImage } from '@/components/delivery-image';
@@ -73,6 +73,7 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
   const [canManage, setCanManage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [dragKind, setDragKind] = useState<'preview' | 'final' | null>(null);
+  const completingRef = useRef(false);
 
   const previewPhotos = useMemo(() => photos.filter((p) => p.kind === 'preview'), [photos]);
   const finalPhotos = useMemo(() => photos.filter((p) => p.kind === 'final'), [photos]);
@@ -293,10 +294,12 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
   }
 
   async function markDeliveryComplete() {
+    if (completingRef.current || busy || deliveryCompleted) return;
     const ok = window.confirm(
       '標記交片完成後，後台「下載選片結果 ZIP」將關閉。確定？',
     );
     if (!ok) return;
+    completingRef.current = true;
     setError('');
     setMessage('');
     setBusy(true);
@@ -309,6 +312,7 @@ export function AdminDeliveryPanel({ bookingId }: { bookingId: string }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失敗');
     } finally {
+      completingRef.current = false;
       setBusy(false);
     }
   }

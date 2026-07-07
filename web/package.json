@@ -13,7 +13,8 @@
     "check": "node scripts/self-check.mjs",
     "test:brutal": "node scripts/brutal-test.mjs",
     "test:security": "node scripts/security-attack-test.mjs",
-    "test:data": "node scripts/data-connection-test.mjs"
+    "test:data": "node scripts/data-connection-test.mjs",
+    "test:integrity": "node scripts/integrity-test.mjs"
   },
   "dependencies": {
     "@fontsource/noto-sans-tc": "^5.2.9",

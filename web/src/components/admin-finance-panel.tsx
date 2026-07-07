@@ -64,6 +64,8 @@ function sourceLabel(source: string): string {
   return source;
 }
 
+const TX_PAGE_SIZE = 40;
+
 export function AdminFinancePanel() {
   const router = useRouter();
   const [period, setPeriod] = useState<FinancePeriod>('month');
@@ -81,8 +83,18 @@ export function AdminFinancePanel() {
   const [typeFilter, setTypeFilter] = useState<'' | TransactionType>('');
   const [depreciationInput, setDepreciationInput] = useState('');
   const [view, setView] = useState<'finance' | 'assets'>('finance');
+  const [txPage, setTxPage] = useState(0);
 
   const navigation = useMemo(() => getFinanceNavigation(period, anchor), [period, anchor]);
+  const txPageCount = Math.max(1, Math.ceil(transactions.length / TX_PAGE_SIZE));
+  const pagedTransactions = useMemo(() => {
+    const start = txPage * TX_PAGE_SIZE;
+    return transactions.slice(start, start + TX_PAGE_SIZE);
+  }, [transactions, txPage]);
+
+  useEffect(() => {
+    setTxPage(0);
+  }, [period, anchor, typeFilter]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -98,7 +110,7 @@ export function AdminFinancePanel() {
       const [summaryRes, txRes, reportRes] = await Promise.all([
         fetch(`/api/admin/finance/summary?${summaryParams}`),
         fetch(`/api/admin/finance/transactions?${txParams}`),
-        fetch(`/api/admin/finance/report?${summaryParams}`),
+        fetch(`/api/admin/finance/report?${summaryParams}&lite=1`),
       ]);
       const summaryData = await summaryRes.json();
       const txData = await txRes.json();
@@ -775,7 +787,7 @@ export function AdminFinancePanel() {
             </div>
           ) : null}
 
-          <div className="admin-table-wrap">
+          <div className="admin-table-wrap admin-finance-tx-table">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -790,8 +802,8 @@ export function AdminFinancePanel() {
                 </tr>
               </thead>
               <tbody>
-                {transactions.length ? (
-                  transactions.map((row) => (
+                {pagedTransactions.length ? (
+                  pagedTransactions.map((row) => (
                     <tr key={row.id}>
                       <td>{row.transactionDate}</td>
                       <td>{typeLabel(row.type)}</td>
@@ -838,6 +850,70 @@ export function AdminFinancePanel() {
               </tbody>
             </table>
           </div>
+
+          <div className="admin-finance-tx-cards">
+            {pagedTransactions.length ? (
+              pagedTransactions.map((row) => (
+                <article key={row.id} className="admin-finance-tx-card">
+                  <div className="admin-finance-tx-card-head">
+                    <strong>{formatCurrency(row.amount)}</strong>
+                    <span>{typeLabel(row.type)} · {row.category}</span>
+                  </div>
+                  <p>{row.transactionDate} · {sourceLabel(row.source)}</p>
+                  <p>{row.caseNumber ? `案件 ${row.caseNumber}` : '無案件編號'}</p>
+                  {row.note || row.receiver ? <p>{row.note || row.receiver}</p> : null}
+                  {row.source === 'manual' ? (
+                    <div className="admin-inline-actions">
+                      <button
+                        type="button"
+                        className="admin-button secondary"
+                        disabled={submitting}
+                        onClick={() => openEdit(row)}
+                      >
+                        編輯
+                      </button>
+                      <button
+                        type="button"
+                        className="admin-button reject"
+                        disabled={submitting}
+                        onClick={() => removeTransaction(row)}
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="admin-muted">預約單同步</span>
+                  )}
+                </article>
+              ))
+            ) : (
+              <p className="admin-muted">此期間尚無收支紀錄。</p>
+            )}
+          </div>
+
+          {transactions.length > TX_PAGE_SIZE ? (
+            <div className="admin-finance-pagination">
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={txPage <= 0}
+                onClick={() => setTxPage((page) => Math.max(0, page - 1))}
+              >
+                上一頁
+              </button>
+              <span>
+                第 {txPage + 1} / {txPageCount} 頁（共 {transactions.length} 筆）
+              </span>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={txPage >= txPageCount - 1}
+                onClick={() => setTxPage((page) => Math.min(txPageCount - 1, page + 1))}
+              >
+                下一頁
+              </button>
+            </div>
+          ) : null}
         </div>
           </>
         ) : null}

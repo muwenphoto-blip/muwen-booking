@@ -19,7 +19,9 @@ export async function GET(request: NextRequest) {
     const today = new Date();
     const defaultAnchor = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
-    const report = await loadFinanceAccountingReport(safePeriod, anchor || defaultAnchor);
+    const report = await loadFinanceAccountingReport(safePeriod, anchor || defaultAnchor, {
+      transactionLimit: request.nextUrl.searchParams.get('lite') === '1' ? 300 : 5000,
+    });
     return NextResponse.json({ report });
   } catch (err) {
     return NextResponse.json(
