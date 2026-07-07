@@ -56,6 +56,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
           booking.case_number || '',
           document,
           session.account,
+          config.services,
         );
       }
     } catch {

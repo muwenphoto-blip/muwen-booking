@@ -18,6 +18,12 @@ import {
 import { ItemRowList, PaymentRowList, QuoteLineList } from '@/components/booking-document-line-list';
 import { ScheduleDateTimeFields } from '@/components/booking-schedule-fields';
 import { FormField } from '@/components/form-field';
+import {
+  DEPOSIT_PERCENT_OPTIONS,
+  applyDepositPercentChoice,
+  calcDepositFromPercent,
+  type DepositPercentChoice,
+} from '@/lib/admin/document-payment';
 import { ServiceOptionPicker } from '@/components/service-option-picker';
 import { DocumentEquipmentPicker } from '@/components/document-equipment-picker';
 
@@ -146,10 +152,47 @@ export function BookingDocumentFeeFooter(props: BookingDocumentSharedProps) {
         />
       </label>
       <label className="admin-field">
-        <span>訂金</span>
+        <span>預付訂金</span>
+        <select
+          value={state.depositPercent || (state.deposit ? 'custom' : '')}
+          onChange={(e) =>
+            onChange(applyDepositPercentChoice(state, e.target.value as DepositPercentChoice, services))
+          }
+        >
+          <option value="">選擇預付比例</option>
+          {DEPOSIT_PERCENT_OPTIONS.map((percent) => (
+            <option key={percent} value={String(percent)}>
+              {percent}%
+              {documentTotal > 0
+                ? `（${calcDepositFromPercent(documentTotal, percent).toLocaleString('zh-Hant-TW')}）`
+                : ''}
+            </option>
+          ))}
+          <option value="custom">自訂金額</option>
+        </select>
+      </label>
+      <label className="admin-field">
+        <span>訂金金額</span>
         <input
+          type="number"
+          min={0}
+          inputMode="numeric"
           value={state.deposit}
-          onChange={(e) => onChange(patchDocumentState(state, { ...state, deposit: e.target.value }))}
+          readOnly={state.depositPercent !== 'custom' && Boolean(state.depositPercent)}
+          className={
+            state.depositPercent !== 'custom' && state.depositPercent
+              ? 'booking-doc-readonly-field'
+              : undefined
+          }
+          onChange={(e) =>
+            onChange(
+              patchDocumentState(state, {
+                ...state,
+                depositPercent: 'custom',
+                deposit: e.target.value,
+              }),
+            )
+          }
         />
       </label>
       <label className="admin-field">

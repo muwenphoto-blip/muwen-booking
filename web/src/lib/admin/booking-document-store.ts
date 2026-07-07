@@ -6,6 +6,7 @@ import {
   parseBookingService,
   parseDateParts,
   stripTimeFromAppointmentContent,
+  type DocumentPaymentRow,
 } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 
@@ -94,6 +95,13 @@ function normalizeDocumentState(
   state.usedAssetIds = Array.isArray(state.usedAssetIds)
     ? state.usedAssetIds.map((id) => String(id || '').trim()).filter(Boolean)
     : [];
+  state.depositPercent = String(state.depositPercent || '');
+  if (state.payments) {
+    state.payments = state.payments.map((row) => ({
+      ...row,
+      paymentKind: (row.paymentKind || '') as DocumentPaymentRow['paymentKind'],
+    }));
+  }
   return migrateEmergencyContactFields(state);
 }
 

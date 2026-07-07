@@ -1,5 +1,7 @@
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
-import { parseAmount } from '@/components/booking-document-shared';
+import { paymentCategoryForRow } from '@/lib/admin/document-payment';
+import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
+import type { ServiceItem } from '@/lib/booking/types';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
 export type TransactionType = 'income' | 'expense' | 'refund';
@@ -545,41 +547,87 @@ export async function syncTransactionsFromDocument(
   caseNumber: string,
   document: BookingDocumentState,
   createdBy: string,
-) {
+  services: ServiceItem[] = [],
+): Promise<{ synced: number; errors: string[] }> {
   const supabase = createAdminSupabaseClient();
   const activeRefs: string[] = [];
+  const errors: string[] = [];
+  let synced = 0;
+
+  const pushIncome = async (input: {
+    sourceRef: string;
+    amount: number;
+    category: string;
+    transactionDate: string;
+    receiver: string;
+  }) => {
+    if (input.amount <= 0) return;
+    activeRefs.push(input.sourceRef);
+    const { error } = await supabase.from('transactions').upsert(
+      {
+        booking_id: bookingId,
+        case_number: caseNumber || document.caseNumber || '',
+        transaction_date: input.transactionDate,
+        type: 'income',
+        category: input.category,
+        amount: input.amount,
+        payment_method: '',
+        receiver: input.receiver,
+        note: '',
+        source: 'document_payment',
+        source_ref: input.sourceRef,
+        created_by: createdBy,
+      },
+      { onConflict: 'booking_id,source,source_ref' },
+    );
+    if (error) {
+      if (error.message.includes('transactions') && error.message.includes('does not exist')) {
+        errors.push('請至 Supabase 執行 supabase/transactions.sql');
+        return;
+      }
+      errors.push(error.message);
+      return;
+    }
+    synced += 1;
+  };
+
+  const fallbackDate =
+    document.shootingDate?.year && document.shootingDate?.month && document.shootingDate?.day
+      ? `${document.shootingDate.year}-${String(document.shootingDate.month).padStart(2, '0')}-${String(document.shootingDate.day).padStart(2, '0')}`
+      : formatIsoDate(new Date());
 
   for (let index = 0; index < (document.payments || []).length; index += 1) {
     const payment = document.payments[index];
     const amount = Math.round(parseAmount(payment.amount));
     if (amount <= 0) continue;
 
-    const sourceRef = String(index);
-    activeRefs.push(sourceRef);
-    const fallbackDate =
-      document.shootingDate?.year && document.shootingDate?.month && document.shootingDate?.day
-        ? `${document.shootingDate.year}-${String(document.shootingDate.month).padStart(2, '0')}-${String(document.shootingDate.day).padStart(2, '0')}`
-        : formatIsoDate(new Date());
-    const transactionDate = parseTransactionDate(payment.date || fallbackDate);
+    await pushIncome({
+      sourceRef: String(index),
+      amount,
+      category: paymentCategoryForRow(payment, index),
+      transactionDate: parseTransactionDate(payment.date || fallbackDate),
+      receiver: String(payment.receiver || '').trim(),
+    });
+  }
 
-    const { error } = await supabase.from('transactions').upsert(
-      {
-        booking_id: bookingId,
-        case_number: caseNumber || document.caseNumber || '',
-        transaction_date: transactionDate,
-        type: 'income',
-        category: index === 0 ? '訂金' : '尾款',
-        amount,
-        payment_method: '',
-        receiver: String(payment.receiver || '').trim(),
-        note: '',
-        source: 'document_payment',
-        source_ref: sourceRef,
-        created_by: createdBy,
-      },
-      { onConflict: 'booking_id,source,source_ref' },
-    );
-    if (error && !error.message.includes('transactions')) throw new Error(error.message);
+  const depositAmount = Math.round(parseAmount(document.deposit));
+  const hasDepositPayment = (document.payments || []).some(
+    (row) => row.paymentKind === 'deposit' && parseAmount(row.amount) > 0,
+  );
+  if (depositAmount > 0 && !hasDepositPayment) {
+    await pushIncome({
+      sourceRef: 'deposit',
+      amount: depositAmount,
+      category: '訂金',
+      transactionDate: fallbackDate,
+      receiver: String(document.handler || document.photographer || '').trim(),
+    });
+  }
+
+  const documentTotal = Math.round(getDocumentGrandTotal(document, services));
+  const hasRecordedIncome = activeRefs.length > 0;
+  if (documentTotal > 0 && !hasRecordedIncome && depositAmount <= 0) {
+    errors.push('已填寫應收總額但尚無收款紀錄，請在付款紀錄新增訂金、全額或尾款');
   }
 
   const { data: existing, error: listError } = await supabase
@@ -588,7 +636,10 @@ export async function syncTransactionsFromDocument(
     .eq('booking_id', bookingId)
     .eq('source', 'document_payment');
   if (listError) {
-    if (listError.message.includes('transactions')) return;
+    if (listError.message.includes('transactions')) {
+      if (!errors.length) errors.push('請至 Supabase 執行 supabase/transactions.sql');
+      return { synced, errors };
+    }
     throw new Error(listError.message);
   }
 
@@ -596,8 +647,11 @@ export async function syncTransactionsFromDocument(
     .filter((row) => !activeRefs.includes(String(row.source_ref || '')))
     .map((row) => row.id);
   if (staleIds.length) {
-    await supabase.from('transactions').delete().in('id', staleIds);
+    const { error } = await supabase.from('transactions').delete().in('id', staleIds);
+    if (error) errors.push(error.message);
   }
+
+  return { synced, errors };
 }
 
 export async function backfillTransactionsFromBookings(createdBy: string) {
@@ -617,7 +671,7 @@ export async function backfillTransactionsFromBookings(createdBy: string) {
   for (const row of data ?? []) {
     const document = row.document_data as BookingDocumentState | null;
     if (!document) continue;
-    await syncTransactionsFromDocument(row.id, row.case_number || '', document, createdBy);
+    await syncTransactionsFromDocument(row.id, row.case_number || '', document, createdBy, []);
     synced += 1;
   }
   return { synced };

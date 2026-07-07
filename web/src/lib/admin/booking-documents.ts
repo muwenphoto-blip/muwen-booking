@@ -52,11 +52,14 @@ export const EMPTY_ITEM_DISCOUNT_RULE: Pick<
   discountGroupFree: '',
 };
 
+export type DocumentPaymentKind = 'deposit' | 'full' | 'balance' | '';
+
 export type DocumentPaymentRow = {
   date: string;
   amount: string;
   customerSignature: string;
   receiver: string;
+  paymentKind?: DocumentPaymentKind;
 };
 
 export type BookingDocumentState = {
@@ -93,6 +96,7 @@ export type BookingDocumentState = {
   additionalAmount: string;
   additionalItems: string;
   deposit: string;
+  depositPercent: string;
   total: string;
   handler: string;
   lineItems: DocumentLineItem[];
@@ -250,6 +254,7 @@ function emptyPayments(): DocumentPaymentRow[] {
     amount: '',
     customerSignature: '',
     receiver: '',
+    paymentKind: '',
   }));
 }
 
@@ -323,6 +328,7 @@ export function buildInitialDocumentState(input: {
     additionalAmount: '',
     additionalItems: '',
     deposit: '',
+    depositPercent: '',
     total: '',
     handler: input.handlerName || (input.staffName === '不指定' ? '' : input.staffName),
     lineItems,

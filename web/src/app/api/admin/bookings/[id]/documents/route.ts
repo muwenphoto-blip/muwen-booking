@@ -162,18 +162,26 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       throw new Error(error.message);
     }
 
-    try {
-      await syncTransactionsFromDocument(
-        id,
-        booking.case_number || document.caseNumber || '',
-        document,
-        session.account,
-      );
-    } catch {
-      // transactions table may not exist yet
-    }
+    const financeSync = await syncTransactionsFromDocument(
+      id,
+      booking.case_number || document.caseNumber || '',
+      document,
+      session.account,
+      config.services,
+    );
 
-    return NextResponse.json({ ok: true, message: '已儲存文件資料' });
+    const financeHint =
+      financeSync.synced > 0
+        ? `，已同步 ${financeSync.synced} 筆收入至財務`
+        : financeSync.errors.length
+          ? `（財務同步：${financeSync.errors[0]}）`
+          : '';
+
+    return NextResponse.json({
+      ok: true,
+      message: `已儲存文件資料${financeHint}`,
+      financeSync,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : '儲存失敗' },

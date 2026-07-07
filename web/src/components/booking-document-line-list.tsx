@@ -25,6 +25,17 @@ import {
   parseAmount,
 } from '@/components/booking-document-shared';
 import type { BookingDocumentSharedProps } from '@/components/booking-document-shared';
+import {
+  DEPOSIT_PERCENT_OPTIONS,
+  applyDepositPercentChoice,
+  documentTotals,
+  formatPaymentSummaryLine,
+  resolvePaymentAmountForKind,
+  todayIsoDate,
+  calcDepositFromPercent,
+  type DepositPercentChoice,
+} from '@/lib/admin/document-payment';
+import type { DocumentPaymentKind } from '@/lib/admin/booking-documents';
 import { ServiceOptionPicker } from '@/components/service-option-picker';
 import { DocumentDiscountHelper } from '@/components/document-discount-helper';
 import { describeDiscountRule } from '@/lib/admin/document-discount';
@@ -34,7 +45,9 @@ function isLineItemFilled(row: DocumentLineItem): boolean {
 }
 
 function isPaymentFilled(row: DocumentPaymentRow): boolean {
-  return Boolean(row.date || row.amount || row.customerSignature || row.receiver);
+  return Boolean(
+    row.date && row.paymentKind && parseAmount(row.amount) > 0,
+  );
 }
 
 function toPaymentDateInputValue(value: string): string {
@@ -88,12 +101,8 @@ function formatLineSummary(row: DocumentLineItem): string {
   return parts.join(' ') || '（尚未設定）';
 }
 
-function formatPaymentSummary(row: DocumentPaymentRow): string {
-  const parts: string[] = [];
-  if (row.date) parts.push(row.date);
-  if (row.amount) parts.push(`$${row.amount}`);
-  if (row.receiver) parts.push(`收款 ${row.receiver}`);
-  return parts.join(' · ') || '（尚未設定）';
+function formatPaymentSummary(row: DocumentPaymentRow, documentTotal: number, deposit: number): string {
+  return formatPaymentSummaryLine(row, documentTotal, deposit);
 }
 
 type ItemRowListProps = BookingDocumentSharedProps;
@@ -558,7 +567,8 @@ export function QuoteLineList({ state, onChange }: QuoteLineListProps) {
 
 type PaymentRowListProps = BookingDocumentSharedProps;
 
-export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
+export function PaymentRowList({ state, onChange, services }: PaymentRowListProps) {
+  const { documentTotal, deposit, balanceDue } = documentTotals(state, services);
   const filledIndices = useMemo(
     () => state.payments.map((row, i) => (isPaymentFilled(row) ? i : -1)).filter((i) => i >= 0),
     [state.payments],
@@ -571,8 +581,33 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
   function startAdd() {
     const index = findFirstEmptyIndex(state.payments, isPaymentFilled);
     if (index >= state.payments.length) return;
+    const defaultKind: DocumentPaymentKind = deposit > 0 ? 'balance' : 'deposit';
+    const amount = resolvePaymentAmountForKind(defaultKind, documentTotal, deposit);
+    onChange(
+      updatePayment(state, index, {
+        date: todayIsoDate(),
+        paymentKind: defaultKind,
+        amount: amount > 0 ? String(amount) : '',
+        customerSignature: '',
+        receiver: '',
+      }),
+    );
     setDraftIndex(index);
     setEditingIndex(index);
+  }
+
+  function updatePaymentKind(index: number, kind: DocumentPaymentKind) {
+    const amount = resolvePaymentAmountForKind(kind, documentTotal, deposit);
+    onChange(
+      updatePayment(state, index, {
+        paymentKind: kind,
+        amount: amount > 0 ? String(amount) : '',
+      }),
+    );
+  }
+
+  function updateDepositPercent(choice: DepositPercentChoice) {
+    onChange(applyDepositPercentChoice(state, choice, services));
   }
 
   function finishEdit(index: number) {
@@ -588,6 +623,7 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
         amount: '',
         customerSignature: '',
         receiver: '',
+        paymentKind: '',
       }));
     }
     setEditingIndex(null);
@@ -600,6 +636,7 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
       amount: '',
       customerSignature: '',
       receiver: '',
+      paymentKind: '',
     }));
     if (editingIndex === index) setEditingIndex(null);
   }
@@ -613,7 +650,7 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
             <div className="booking-doc-row-card-body">
               <span className="booking-doc-row-card-no">{index + 1}</span>
               <div className="booking-doc-row-card-text">
-                <strong>{formatPaymentSummary(state.payments[index])}</strong>
+                <strong>{formatPaymentSummary(state.payments[index], documentTotal, deposit)}</strong>
               </div>
             </div>
             <div className="booking-doc-row-card-actions">
@@ -642,6 +679,95 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
             <strong>{draftIndex === editingIndex ? '新增付款' : `編輯付款 ${editingIndex + 1}`}</strong>
           </div>
           <div className="admin-grid-2">
+            <label className="admin-field admin-field--full">
+              <span>應收總額</span>
+              <input
+                className="booking-doc-readonly-field"
+                readOnly
+                tabIndex={-1}
+                value={documentTotal > 0 ? String(documentTotal) : ''}
+                placeholder="請先填寫服務明細"
+              />
+            </label>
+            <label className="admin-field">
+              <span>預付訂金</span>
+              <select
+                value={state.depositPercent || (state.deposit ? 'custom' : '')}
+                onChange={(e) => updateDepositPercent(e.target.value as DepositPercentChoice)}
+              >
+                <option value="">選擇預付比例</option>
+                {DEPOSIT_PERCENT_OPTIONS.map((percent) => (
+                  <option key={percent} value={String(percent)}>
+                    {percent}%（
+                    {documentTotal > 0
+                      ? calcDepositFromPercent(documentTotal, percent).toLocaleString('zh-Hant-TW')
+                      : '依總額計算'}
+                    ）
+                  </option>
+                ))}
+                <option value="custom">自訂金額</option>
+              </select>
+            </label>
+            <label className="admin-field">
+              <span>訂金金額</span>
+              <input
+                type="number"
+                min={0}
+                inputMode="numeric"
+                value={state.deposit}
+                readOnly={state.depositPercent !== 'custom' && Boolean(state.depositPercent)}
+                className={
+                  state.depositPercent !== 'custom' && state.depositPercent
+                    ? 'booking-doc-readonly-field'
+                    : undefined
+                }
+                placeholder={documentTotal > 0 ? '0' : '請先填寫服務明細'}
+                onChange={(e) =>
+                  onChange({
+                    ...state,
+                    depositPercent: 'custom',
+                    deposit: e.target.value,
+                  })
+                }
+              />
+            </label>
+            <label className="admin-field">
+              <span>付款類型</span>
+              <select
+                value={state.payments[editingIndex].paymentKind || ''}
+                onChange={(e) =>
+                  updatePaymentKind(editingIndex, e.target.value as DocumentPaymentKind)
+                }
+              >
+                <option value="">請選擇</option>
+                <option value="deposit">訂金（預付）</option>
+                <option value="full">全額</option>
+                <option value="balance">尾款（剩餘）</option>
+              </select>
+            </label>
+            <label className="admin-field">
+              <span>實收金額</span>
+              <input
+                className="booking-doc-readonly-field"
+                readOnly
+                tabIndex={-1}
+                value={state.payments[editingIndex].amount}
+                placeholder="依付款類型自動帶入"
+              />
+            </label>
+            <label className="admin-field">
+              <span>參考：全額 / 尾款</span>
+              <input
+                className="booking-doc-readonly-field"
+                readOnly
+                tabIndex={-1}
+                value={
+                  documentTotal > 0
+                    ? `全額 ${documentTotal}｜尾款 ${balanceDue}`
+                    : ''
+                }
+              />
+            </label>
             <label className="admin-field">
               <span>付款日期</span>
               <input
@@ -649,15 +775,6 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
                 value={toPaymentDateInputValue(state.payments[editingIndex].date)}
                 onChange={(e) =>
                   onChange(updatePayment(state, editingIndex, { date: e.target.value }))
-                }
-              />
-            </label>
-            <label className="admin-field">
-              <span>付款金額</span>
-              <input
-                value={state.payments[editingIndex].amount}
-                onChange={(e) =>
-                  onChange(updatePayment(state, editingIndex, { amount: e.target.value }))
                 }
               />
             </label>

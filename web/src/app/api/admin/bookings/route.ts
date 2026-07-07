@@ -23,6 +23,7 @@ import {
 } from '@/lib/admin/booking-document-store';
 import { DOCUMENT_DATA_SETUP_HINT } from '@/lib/admin/booking-document-query';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
+import { syncTransactionsFromDocument } from '@/lib/admin/finance';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canCreateWalkInBooking, canViewAllBookings } from '@/lib/admin/session';
 import { isManagerRole } from '@/lib/admin/session';
@@ -219,6 +220,14 @@ export async function POST(request: NextRequest) {
       }
       throw new Error(docUpdate.error.message);
     }
+
+    await syncTransactionsFromDocument(
+      inserted.id,
+      inserted.case_number || '',
+      savedDocument,
+      session.account,
+      config.services,
+    );
 
     const summary = buildBookingLogLabel({
       booking_date: payload.date,
