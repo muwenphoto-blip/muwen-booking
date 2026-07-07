@@ -8,6 +8,7 @@ import type {
 } from '@/lib/admin/booking-documents';
 import { serviceOptionsFor } from '@/lib/admin/booking-documents';
 import { applyItemRowAutoDiscount } from '@/lib/admin/document-discount';
+import { applyDocumentPaymentTotals } from '@/lib/admin/document-payment';
 import type { AdminPromotionRow } from '@/lib/admin/promotions';
 import type { AssetOption } from '@/lib/admin/assets';
 import type { ServiceItem } from '@/lib/booking/types';
@@ -153,12 +154,15 @@ export function applyDocumentFinancialSync(
     return { ...line, ...itemRowToLineItem(item) };
   });
 
-  return {
-    ...state,
-    lineItems,
-    amount: amountStr || state.amount,
-    total: totalStr || state.total,
-  };
+  return applyDocumentPaymentTotals(
+    {
+      ...state,
+      lineItems,
+      amount: amountStr || state.amount,
+      total: totalStr || state.total,
+    },
+    services,
+  );
 }
 
 export function getDocumentGrandTotal(state: BookingDocumentState, services: ServiceItem[] = []): number {

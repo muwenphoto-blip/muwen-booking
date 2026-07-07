@@ -8,8 +8,8 @@ import {
   stripTimeFromAppointmentContent,
   type DocumentPaymentRow,
 } from '@/lib/admin/booking-documents';
+import { applyDocumentPaymentTotals, inferPaymentKind } from '@/lib/admin/document-payment';
 import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
-import { inferPaymentKind } from '@/lib/admin/document-payment';
 import type { ServiceItem } from '@/lib/booking/types';
 
 type BookingRowForDocument = {
@@ -118,7 +118,7 @@ function normalizeDocumentState(
       };
     });
   }
-  return migrateEmergencyContactFields(state);
+  return migrateEmergencyContactFields(applyDocumentPaymentTotals(state, services));
 }
 
 function cleanBookingNote(note: string | null | undefined): string {

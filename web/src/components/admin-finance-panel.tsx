@@ -408,7 +408,12 @@ export function AdminFinancePanel() {
               </div>
               <div className="admin-stat admin-stat-confirmed">
                 <span>淨利</span>
-                <strong>{formatCurrency(summary.netProfit)}</strong>
+                <strong>
+                  {formatCurrency(
+                    accountingReport?.accounting.netProfit ??
+                      summary.netProfit - (accountingReport?.accounting.equipmentDepreciation ?? 0),
+                  )}
+                </strong>
               </div>
               <div
                 className={[
@@ -486,6 +491,10 @@ export function AdminFinancePanel() {
                   <div className="admin-finance-pl-row">
                     <span>減：退款</span>
                     <strong>{formatCurrency(accountingReport.accounting.totalRefund)}</strong>
+                  </div>
+                  <div className="admin-finance-pl-row">
+                    <span>營業淨利</span>
+                    <strong>{formatCurrency(accountingReport.accounting.operatingProfit)}</strong>
                   </div>
                   <div className="admin-finance-pl-row indent">
                     <span>減：器材損耗</span>

@@ -65,6 +65,41 @@ export function formatPaymentSummaryLine(
   return parts.join(' · ') || '（尚未設定）';
 }
 
+export function syncDepositIfPercentSet(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): BookingDocumentState {
+  const choice = state.depositPercent;
+  if (!choice || choice === 'custom') return state;
+  const percent = parseInt(choice, 10);
+  if (!DEPOSIT_PERCENT_OPTIONS.includes(percent as (typeof DEPOSIT_PERCENT_OPTIONS)[number])) {
+    return state;
+  }
+  return applyDepositPercentChoice(state, percent as DepositPercentChoice, services);
+}
+
+/** 依付款類型自動帶入金額（訂金／尾款／全額） */
+export function syncPaymentAmountsForKinds(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): BookingDocumentState {
+  const { documentTotal, deposit } = documentTotals(state, services);
+  const payments = (state.payments || []).map((row) => {
+    if (!row.paymentKind) return row;
+    const amount = resolvePaymentAmountForKind(row.paymentKind, documentTotal, deposit);
+    if (amount <= 0) return row;
+    return { ...row, amount: String(amount) };
+  });
+  return { ...state, payments };
+}
+
+export function applyDocumentPaymentTotals(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): BookingDocumentState {
+  return syncPaymentAmountsForKinds(syncDepositIfPercentSet(state, services), services);
+}
+
 export function applyDepositPercentChoice(
   state: BookingDocumentState,
   choice: DepositPercentChoice,
@@ -78,11 +113,14 @@ export function applyDepositPercentChoice(
     return { ...state, depositPercent: 'custom' };
   }
   const deposit = calcDepositFromPercent(total, choice);
-  return {
-    ...state,
-    depositPercent: String(choice),
-    deposit: deposit > 0 ? String(deposit) : '',
-  };
+  return applyDocumentPaymentTotals(
+    {
+      ...state,
+      depositPercent: String(choice),
+      deposit: deposit > 0 ? String(deposit) : '',
+    },
+    services,
+  );
 }
 
 export function documentTotals(state: BookingDocumentState, services: ServiceItem[]) {

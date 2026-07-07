@@ -66,6 +66,7 @@ export type FinanceAccountingMetrics = {
   netRevenue: number;
   totalExpense: number;
   totalRefund: number;
+  operatingProfit: number;
   netProfit: number;
   netProfitMargin: number;
   discountRate: number;
@@ -591,7 +592,16 @@ export async function syncTransactionsFromDocument(
   const hasDepositPayment = (prepared.payments || []).some(
     (row) => row.paymentKind === 'deposit' && parseAmount(row.amount) > 0,
   );
-  if (depositAmount > 0 && !hasDepositPayment) {
+  const hasAnyPayment = rowsToInsert.length > 0;
+
+  const documentTotal = Math.round(getDocumentGrandTotal(prepared, services));
+  if (documentTotal > 0 && !hasAnyPayment && depositAmount <= 0) {
+    errors.push('已填寫應收總額但尚無收款紀錄，請在付款紀錄新增訂金、全額或尾款');
+    return { synced: 0, errors };
+  }
+
+  // 僅同步付款紀錄列，避免訂金欄位與付款列重複入帳
+  if (!hasAnyPayment && depositAmount > 0 && !hasDepositPayment) {
     rowsToInsert.push({
       booking_id: bookingId,
       case_number: caseNumber || prepared.caseNumber || '',
@@ -606,12 +616,6 @@ export async function syncTransactionsFromDocument(
       source_ref: 'deposit',
       created_by: createdBy,
     });
-  }
-
-  const documentTotal = Math.round(getDocumentGrandTotal(prepared, services));
-  if (documentTotal > 0 && rowsToInsert.length === 0 && depositAmount <= 0) {
-    errors.push('已填寫應收總額但尚無收款紀錄，請在付款紀錄新增訂金、全額或尾款');
-    return { synced: 0, errors };
   }
 
   const { error: deleteError } = await supabase

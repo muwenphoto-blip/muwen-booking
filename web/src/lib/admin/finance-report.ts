@@ -70,12 +70,14 @@ export function buildFinanceAccountingReport(
 
   const grossRevenue = summary.income + summary.discountCost;
   const netRevenue = summary.income;
+  const operatingProfit = summary.netProfit;
+  const netProfit = operatingProfit - equipmentDepreciation;
   const netProfitMargin =
-    netRevenue > 0 ? Math.round((summary.netProfit / netRevenue) * 1000) / 10 : 0;
+    netRevenue > 0 ? Math.round((netProfit / netRevenue) * 1000) / 10 : 0;
   const discountRate =
     grossRevenue > 0 ? Math.round((summary.discountCost / grossRevenue) * 1000) / 10 : 0;
   const monthKey = monthKeyFromIsoDate(summary.from);
-  const cashFlowMetrics = resolveCashFlow(summary.netProfit, equipmentDepreciation);
+  const cashFlowMetrics = resolveCashFlow(operatingProfit, equipmentDepreciation);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -89,7 +91,8 @@ export function buildFinanceAccountingReport(
       netRevenue,
       totalExpense: summary.expense,
       totalRefund: summary.refund,
-      netProfit: summary.netProfit,
+      operatingProfit,
+      netProfit,
       netProfitMargin,
       discountRate,
       transactionCount: summary.transactionCount,
@@ -236,8 +239,11 @@ function profitLossRows(report: FinanceAccountingReport): string[] {
   }
 
   lines.push('');
-  lines.push(csvRow(['六、本期淨利', report.accounting.netProfit, '', `淨利率 ${report.accounting.netProfitMargin}%`]));
-  lines.push(csvRow(['七、本期流水', report.accounting.cashFlow, '', report.accounting.cashFlowLabel]));
+  lines.push(csvRow(['六、營業淨利', report.accounting.operatingProfit, '', '收入 − 支出 − 退款']));
+  lines.push(csvRow(['七、減：器材損耗', report.accounting.equipmentDepreciation, '', '依器材價值換算']));
+  lines.push('');
+  lines.push(csvRow(['八、本期淨利', report.accounting.netProfit, '', `淨利率 ${report.accounting.netProfitMargin}%`]));
+  lines.push(csvRow(['九、本期流水', report.accounting.cashFlow, '', report.accounting.cashFlowLabel]));
 
   return lines;
 }
