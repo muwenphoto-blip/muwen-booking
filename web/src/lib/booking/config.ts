@@ -85,6 +85,7 @@ function buildStaffList(names: string[]): SelectOption[] {
 
 function dedupeServices(
   rows: {
+    id?: string;
     name: string;
     name_en: string;
     options_json: unknown;
@@ -115,6 +116,7 @@ function dedupeServices(
         : [];
       const basePrice = Number(row.base_price);
       items.push({
+        ...(row.id ? { id: row.id } : {}),
         name: row.name,
         label: row.name_en ? `${row.name} ${row.name_en}` : row.name,
         ...(Number.isFinite(basePrice) && basePrice > 0 ? { basePrice } : {}),
@@ -137,12 +139,13 @@ async function loadBookingConfigFromDb(): Promise<BookingConfig> {
   const [{ data: settings, error: settingsError }, servicesResult, { data: staff, error: staffError }] =
     await Promise.all([
       supabase.from('settings').select('key, value'),
-      supabase.from('services').select('name, name_en, options_json, sort_order, base_price').eq('active', true),
+      supabase.from('services').select('id, name, name_en, options_json, sort_order, base_price').eq('active', true),
       admin.from('staff').select('name, case_prefix').eq('active', true).order('name'),
     ]);
 
   if (settingsError) throw new Error(settingsError.message);
   let services: {
+    id?: string;
     name: string;
     name_en: string;
     options_json: unknown;
@@ -153,7 +156,7 @@ async function loadBookingConfigFromDb(): Promise<BookingConfig> {
   if (servicesError?.message?.includes('base_price')) {
     const fallback = await supabase
       .from('services')
-      .select('name, name_en, options_json, sort_order')
+      .select('id, name, name_en, options_json, sort_order')
       .eq('active', true);
     services = fallback.data;
     servicesError = fallback.error;

@@ -103,6 +103,9 @@ export function AdminShell({ children, onRefresh }: AdminShellProps) {
         ) : null}
         {isManager ? (
           <>
+            <Link href="/admin/finance" className={navClass(pathname === '/admin/finance')}>
+              財務營運
+            </Link>
             <Link href="/admin/team" className={navClass(pathname === '/admin/team')}>
               團隊管理
             </Link>

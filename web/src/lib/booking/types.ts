@@ -2,6 +2,7 @@ export type GenderOption = { value: string; label: string };
 export type SelectOption = { value: string; label: string };
 export type ServiceOption = { value: string; label: string; price?: number };
 export type ServiceItem = {
+  id?: string;
   name: string;
   label: string;
   basePrice?: number;

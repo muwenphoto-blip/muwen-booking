@@ -17,7 +17,7 @@ export async function GET() {
     assertMasterRole(session.role);
 
     const settings = await loadAdminSettings();
-    return NextResponse.json({ settings });
+    return NextResponse.json({ settings, promotions: settings.promotions });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : '無法載入設定' },

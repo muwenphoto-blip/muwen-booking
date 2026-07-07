@@ -5,6 +5,7 @@ import {
   SHOP_PHONE,
   type BookingDocumentState,
   formatDatePartsToIso,
+  syncDocumentCatalogPricing,
 } from '@/lib/admin/booking-documents';
 import {
   DOCUMENT_DATA_SETUP_HINT,
@@ -16,7 +17,8 @@ import {
   serializeBookingDocumentState,
 } from '@/lib/admin/booking-document-store';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
-import { syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
+import { loadAdminPromotions } from '@/lib/admin/promotions';
+import { syncTransactionsFromDocument } from '@/lib/admin/finance';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canViewAllBookings } from '@/lib/admin/session';
 import { loadBookingConfig } from '@/lib/booking/config';
@@ -45,6 +47,7 @@ export async function GET(_request: Request, context: RouteContext) {
     }
 
     const config = await loadBookingConfig();
+    const promotions = await loadAdminPromotions();
     const initial = applyDocumentFinancialSync(
       syncDocumentCatalogPricing(
         loadBookingDocumentState(
@@ -53,6 +56,7 @@ export async function GET(_request: Request, context: RouteContext) {
           canViewAllBookings(session.role) ? '' : session.photographerName || session.account,
         ),
         config.services,
+        promotions,
       ),
       config.services,
     );
@@ -63,6 +67,7 @@ export async function GET(_request: Request, context: RouteContext) {
       shopAddress: SHOP_ADDRESS,
       shopPhone: SHOP_PHONE,
       services: config.services,
+      promotions,
       documentColumnReady,
       documentSetupHint: documentColumnReady ? '' : DOCUMENT_DATA_SETUP_HINT,
       booking: {
@@ -113,6 +118,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     }
 
     const config = await loadBookingConfig();
+    const promotions = await loadAdminPromotions();
     const document = applyDocumentFinancialSync(
       syncDocumentCatalogPricing(
         {
@@ -120,6 +126,7 @@ export async function PUT(request: NextRequest, context: RouteContext) {
           caseNumber: booking.case_number || body.document.caseNumber || '',
         },
         config.services,
+        promotions,
       ),
       config.services,
     );
@@ -145,6 +152,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         return NextResponse.json({ error: DOCUMENT_DATA_SETUP_HINT }, { status: 400 });
       }
       throw new Error(error.message);
+    }
+
+    try {
+      await syncTransactionsFromDocument(
+        id,
+        booking.case_number || document.caseNumber || '',
+        document,
+        session.account,
+      );
+    } catch {
+      // transactions table may not exist yet
     }
 
     return NextResponse.json({ ok: true, message: '已儲存文件資料' });

@@ -1,3 +1,10 @@
+import { applyItemRowAutoDiscount } from '@/lib/admin/document-discount';
+import {
+  applyPromotionToItemRow,
+  findPromotionForServiceOption,
+  resolveServiceIdByName,
+  type AdminPromotionRow,
+} from '@/lib/admin/promotions';
 import type { ServiceItem } from '@/lib/booking/types';
 
 export const SHOP_ADDRESS = '台中市潭子區仁愛路二段18之1號';
@@ -21,6 +28,28 @@ export type DocumentItemRow = {
   discount: string;
   itemTotal: string;
   quantity: string;
+  discountMode?: string;
+  discountBasePeople?: string;
+  discountPerExtra?: string;
+  discountGroupPay?: string;
+  discountGroupFree?: string;
+  promotionId?: string;
+  promotionName?: string;
+};
+
+export const EMPTY_ITEM_DISCOUNT_RULE: Pick<
+  DocumentItemRow,
+  | 'discountMode'
+  | 'discountBasePeople'
+  | 'discountPerExtra'
+  | 'discountGroupPay'
+  | 'discountGroupFree'
+> = {
+  discountMode: 'manual',
+  discountBasePeople: '',
+  discountPerExtra: '',
+  discountGroupPay: '',
+  discountGroupFree: '',
 };
 
 export type DocumentPaymentRow = {
@@ -209,6 +238,7 @@ function emptyItemRows(): DocumentItemRow[] {
     discount: '',
     itemTotal: '',
     quantity: '',
+    ...EMPTY_ITEM_DISCOUNT_RULE,
   }));
 }
 
@@ -253,6 +283,7 @@ export function buildInitialDocumentState(input: {
       discount: '',
       itemTotal: '',
       quantity: '1',
+      ...EMPTY_ITEM_DISCOUNT_RULE,
     };
   }
 
@@ -337,6 +368,7 @@ function clearPrimaryItemPricing(state: BookingDocumentState): BookingDocumentSt
       discount: '',
       quantity: '',
       itemTotal: '',
+      ...EMPTY_ITEM_DISCOUNT_RULE,
     };
   }
 
@@ -356,20 +388,35 @@ function clearPrimaryItemPricing(state: BookingDocumentState): BookingDocumentSt
 function applyCatalogPriceToDocument(
   state: BookingDocumentState,
   services: ServiceItem[],
+  promotions: AdminPromotionRow[] = [],
+  serviceIdMap: { id: string; name: string }[] = [],
 ): BookingDocumentState {
   const price = resolveServiceItemPrice(services, state.service, state.serviceOption);
   if (!price) return clearPrimaryItemPricing(state);
+
+  const serviceId =
+    services.find((item) => item.name === state.service)?.id ||
+    resolveServiceIdByName(serviceIdMap, state.service);
+  const promotion = serviceId
+    ? findPromotionForServiceOption(promotions, serviceId, state.serviceOption)
+    : null;
 
   const itemRows = [...state.itemRows];
   if (itemRows[0]) {
     const quantity = itemRows[0].quantity?.trim() || '1';
     const unit = Number(price) || 0;
     const qtyNum = Number(quantity) || 1;
-    const discount = Number(String(itemRows[0].discount || '').replace(/,/g, '')) || 0;
+    const promotedRow = applyPromotionToItemRow(
+      { ...itemRows[0], price, quantity },
+      promotion,
+    );
+    const pricedRow = applyItemRowAutoDiscount(promotedRow);
+    const discount =
+      Number(String(pricedRow.discount || '').replace(/,/g, '')) || 0;
     const total = Math.max(0, unit * qtyNum - discount);
     const itemTotal = total > 0 ? String(Math.round(total)) : '';
     itemRows[0] = {
-      ...itemRows[0],
+      ...pricedRow,
       price,
       quantity,
       itemTotal,
@@ -392,14 +439,17 @@ function applyCatalogPriceToDocument(
 export function syncDocumentCatalogPricing(
   state: BookingDocumentState,
   services: ServiceItem[],
+  promotions: AdminPromotionRow[] = [],
+  serviceIdMap: { id: string; name: string }[] = [],
 ): BookingDocumentState {
-  return applyCatalogPriceToDocument(state, services);
+  return applyCatalogPriceToDocument(state, services, promotions, serviceIdMap);
 }
 
 export function syncServiceChange(
   state: BookingDocumentState,
   serviceName: string,
   services: ServiceItem[],
+  promotions: AdminPromotionRow[] = [],
 ): BookingDocumentState {
   const serviceOption = '';
   const label = serviceName;
@@ -422,6 +472,7 @@ export function syncServiceChange(
       discount: '',
       quantity: '',
       itemTotal: '',
+      ...EMPTY_ITEM_DISCOUNT_RULE,
     };
   }
 
@@ -435,6 +486,10 @@ export function syncServiceChange(
       itemRows,
     },
     services,
+    promotions,
+    services
+      .filter((item) => item.id)
+      .map((item) => ({ id: item.id as string, name: item.name })),
   );
 }
 
@@ -442,6 +497,7 @@ export function syncServiceOptionChange(
   state: BookingDocumentState,
   serviceOption: string,
   services: ServiceItem[],
+  promotions: AdminPromotionRow[] = [],
 ): BookingDocumentState {
   const label = serviceOption
     ? `${state.service}｜${serviceOption}`
@@ -466,6 +522,10 @@ export function syncServiceOptionChange(
       itemRows,
     },
     services,
+    promotions,
+    services
+      .filter((item) => item.id)
+      .map((item) => ({ id: item.id as string, name: item.name })),
   );
 }
 

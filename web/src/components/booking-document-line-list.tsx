@@ -11,6 +11,7 @@ import {
   serviceOptionPlaceholder,
   syncServiceChange,
   syncServiceOptionChange,
+  EMPTY_ITEM_DISCOUNT_RULE,
 } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import {
@@ -24,6 +25,9 @@ import {
   parseAmount,
 } from '@/components/booking-document-shared';
 import type { BookingDocumentSharedProps } from '@/components/booking-document-shared';
+import { ServiceOptionPicker } from '@/components/service-option-picker';
+import { DocumentDiscountHelper } from '@/components/document-discount-helper';
+import { describeDiscountRule } from '@/lib/admin/document-discount';
 
 function isLineItemFilled(row: DocumentLineItem): boolean {
   return Boolean(row.serviceContent || row.quantity || row.unitPrice || row.amount || row.remarks);
@@ -44,9 +48,25 @@ function formatItemSummary(row: DocumentItemRow, services: ServiceItem[]): strin
     const item = services.find((s) => s.name === row.serviceContent);
     parts.push(item?.label || row.serviceContent);
   }
-  if (row.packageChoice) parts.push(row.packageChoice);
+  if (row.packageChoice) {
+    const item = services.find((s) => s.name === row.serviceContent);
+    const opt = item?.options.find((entry) => entry.value === row.packageChoice);
+    parts.push(opt?.value || row.packageChoice);
+  }
   if (row.quantity) parts.push(`數量 ${row.quantity}`);
   return parts.join(' · ') || '（尚未設定）';
+}
+
+function getPackageEnglishLabel(row: DocumentItemRow, services: ServiceItem[]): string {
+  if (!row.packageChoice || !row.serviceContent) return '';
+  const item = services.find((s) => s.name === row.serviceContent);
+  const opt = item?.options.find((entry) => entry.value === row.packageChoice);
+  if (!opt) return '';
+  const label = String(opt.label || '').trim();
+  const value = String(opt.value || '').trim();
+  if (!label || label === value) return '';
+  if (label.startsWith(value)) return label.slice(value.length).trim();
+  return '';
 }
 
 function formatLineSummary(row: DocumentLineItem): string {
@@ -68,7 +88,7 @@ function formatPaymentSummary(row: DocumentPaymentRow): string {
 
 type ItemRowListProps = BookingDocumentSharedProps;
 
-export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
+export function ItemRowList({ state, services, promotions = [], onChange }: ItemRowListProps) {
   const filledIndices = useMemo(
     () => state.itemRows.map((row, i) => (isItemRowFilled(row, services) ? i : -1)).filter((i) => i >= 0),
     [state.itemRows, services],
@@ -113,6 +133,7 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
         discount: '',
         itemTotal: '',
         quantity: '',
+        ...EMPTY_ITEM_DISCOUNT_RULE,
       }));
     }
     setEditingIndex(null);
@@ -127,6 +148,7 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
       discount: '',
       itemTotal: '',
       quantity: '',
+      ...EMPTY_ITEM_DISCOUNT_RULE,
     }));
     setEditingIndex(null);
     setDraftIndex(null);
@@ -144,8 +166,11 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
         const meta: string[] = [];
         if (row.price) meta.push(`價格 ${row.price}`);
         if (row.discount) meta.push(`折扣 ${row.discount}`);
+        const ruleHint = describeDiscountRule(row);
+        if (ruleHint) meta.push(ruleHint);
         const lineTotal = getItemRowTotal(row);
         if (lineTotal > 0) meta.push(`小計 ${lineTotal}`);
+        const packageEnglish = getPackageEnglishLabel(row, services);
 
         return (
           <div key={index} className="booking-doc-row-card">
@@ -153,6 +178,7 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
               <span className="booking-doc-row-card-no">{index + 1}</span>
               <div className="booking-doc-row-card-text">
                 <strong>{formatItemSummary(row, services)}</strong>
+                {packageEnglish ? <p className="booking-doc-row-card-en">{packageEnglish}</p> : null}
                 {meta.length ? <p>{meta.join(' · ')}</p> : null}
               </div>
             </div>
@@ -181,6 +207,7 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
           index={editingIndex}
           row={state.itemRows[editingIndex]}
           services={services}
+          promotions={promotions}
           isNew={draftIndex === editingIndex}
           onChange={onChange}
           state={state}
@@ -203,6 +230,7 @@ function ItemRowEditor({
   index,
   row,
   services,
+  promotions = [],
   state,
   isNew,
   onChange,
@@ -212,6 +240,7 @@ function ItemRowEditor({
   index: number;
   row: DocumentItemRow;
   services: ServiceItem[];
+  promotions?: import('@/lib/admin/promotions').AdminPromotionRow[];
   state: ItemRowListProps['state'];
   isNew: boolean;
   onChange: ItemRowListProps['onChange'];
@@ -234,7 +263,7 @@ function ItemRowEditor({
             onChange={(e) => {
               const serviceName = e.target.value;
               if (index === 0) {
-                onChange(syncServiceChange(state, serviceName, services));
+                onChange(syncServiceChange(state, serviceName, services, promotions));
                 return;
               }
               onChange(
@@ -253,26 +282,22 @@ function ItemRowEditor({
             ))}
           </select>
         </label>
-        <label className="admin-field">
+        <label className="admin-field admin-field--full">
           <span>方案</span>
-          <select
+          <ServiceOptionPicker
             value={row.packageChoice}
-            onChange={(e) => {
-              const next = updateItemRow(state, index, { packageChoice: e.target.value });
+            options={packageOptions}
+            placeholder={serviceOptionPlaceholder(packageOptions.length)}
+            disabled={!row.serviceContent || packageOptions.length === 0}
+            onChange={(nextValue) => {
+              const next = updateItemRow(state, index, { packageChoice: nextValue });
               if (index === 0) {
-                onChange(syncServiceOptionChange(next, e.target.value, services));
+                onChange(syncServiceOptionChange(next, nextValue, services, promotions));
               } else {
                 onChange(next);
               }
             }}
-          >
-            <option value="">{serviceOptionPlaceholder(packageOptions.length)}</option>
-            {packageOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+          />
         </label>
         <label className="admin-field">
           <span>單價</span>
@@ -285,19 +310,23 @@ function ItemRowEditor({
           />
         </label>
         <label className="admin-field">
-          <span>折扣</span>
+          <span>折扣（元）</span>
           <input
             type="number"
             min={0}
             inputMode="numeric"
             value={row.discount}
+            readOnly={(row.discountMode || 'manual') !== 'manual'}
+            className={
+              (row.discountMode || 'manual') !== 'manual' ? 'booking-doc-readonly-field' : undefined
+            }
             onChange={(e) =>
               onChange(updateItemRowWithCalc(state, index, { discount: e.target.value }))
             }
           />
         </label>
-        <label className="admin-field">
-          <span>數量</span>
+        <label className="admin-field admin-field--full">
+          <span>數量（人數優惠請填拍攝人數）</span>
           <input
             type="number"
             min={0}
@@ -308,6 +337,10 @@ function ItemRowEditor({
             }
           />
         </label>
+        <DocumentDiscountHelper
+          row={row}
+          onPatch={(patch) => onChange(updateItemRowWithCalc(state, index, patch))}
+        />
         <label className="admin-field">
           <span>單項總額</span>
           <input

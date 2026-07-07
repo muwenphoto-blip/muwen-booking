@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BookingDocumentUnifiedEdit, BookingDocumentFeeFooter } from '@/components/booking-document-edit-views';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
+import type { AdminPromotionRow } from '@/lib/admin/promotions';
 import { syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
@@ -33,6 +34,7 @@ export function BookingDocumentsModal({
   const [busy, setBusy] = useState<'save' | null>(null);
   const [state, setState] = useState<BookingDocumentState | null>(null);
   const [services, setServices] = useState<ServiceItem[]>([]);
+  const [promotions, setPromotions] = useState<AdminPromotionRow[]>([]);
   const [shopName, setShopName] = useState('沐紋映像');
   const [shopFullName, setShopFullName] = useState('沐紋映像攝影工作室');
   const [shopAddress, setShopAddress] = useState('');
@@ -65,11 +67,12 @@ export function BookingDocumentsModal({
         if (!res.ok) throw new Error(data.error || '無法載入文件');
         setState(
           applyDocumentFinancialSync(
-            syncDocumentCatalogPricing(data.initial, data.services ?? []),
+            syncDocumentCatalogPricing(data.initial, data.services ?? [], data.promotions ?? []),
             data.services ?? [],
           ),
         );
         setServices(data.services ?? []);
+        setPromotions(data.promotions ?? []);
         setShopName(data.shopName || '沐紋映像');
         setShopFullName(data.shopFullName || '沐紋映像攝影工作室');
         setShopAddress(data.shopAddress || '');
@@ -100,7 +103,7 @@ export function BookingDocumentsModal({
 
   function handleChange(next: BookingDocumentState) {
     const synced = applyDocumentFinancialSync(
-      syncDocumentCatalogPricing(next, services),
+      syncDocumentCatalogPricing(next, services, promotions),
       services,
     );
     setState(synced);
@@ -171,6 +174,7 @@ export function BookingDocumentsModal({
     ? {
         state,
         services,
+        promotions,
         shopName,
         shopFullName,
         shopAddress,

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { BookingConfig, BookingSlot } from '@/lib/booking/types';
+import type { AdminPromotionRow } from '@/lib/admin/promotions';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE, syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
@@ -24,8 +25,12 @@ import {
   getDayOfWeek,
 } from '@/lib/booking/time';
 
-function syncWalkInDocument(state: BookingDocumentState, services: ServiceItem[]) {
-  return applyDocumentFinancialSync(syncDocumentCatalogPricing(state, services), services);
+function syncWalkInDocument(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+  promotions: AdminPromotionRow[] = [],
+) {
+  return applyDocumentFinancialSync(syncDocumentCatalogPricing(state, services, promotions), services);
 }
 
 type WalkInBookingModalProps = {
@@ -69,6 +74,7 @@ export function WalkInBookingModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [handlerOptions, setHandlerOptions] = useState<TeamHandlerOption[]>([]);
   const [defaultHandler, setDefaultHandler] = useState('');
+  const [promotions, setPromotions] = useState<AdminPromotionRow[]>([]);
 
   const staffChoices = useMemo(() => {
     if (!config) return [];
@@ -89,10 +95,13 @@ export function WalkInBookingModal({
     setSlots([]);
     setFieldErrors({});
 
-    fetch('/api/booking/config')
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '無法載入設定');
+    Promise.all([
+      fetch('/api/booking/config').then((res) => res.json()),
+      fetch('/api/admin/settings/promotions').then((res) => res.json()),
+    ])
+      .then(([data, promoData]) => {
+        if (!data?.services) throw new Error('無法載入設定');
+        setPromotions(promoData.promotions ?? []);
         setConfig(data);
         setHeadcount(data.headcountOptions[0]?.value ?? '');
         setGender(data.genderOptions[0]?.value ?? '');
@@ -109,7 +118,7 @@ export function WalkInBookingModal({
         const today = new Date();
         const initialDate = findNextOpenDate(today, data.openDays);
         setDate(initialDate);
-        setDocState(syncWalkInDocument(buildEmptyWalkInDocument(data.services ?? []), data.services ?? []));
+        setDocState(syncWalkInDocument(buildEmptyWalkInDocument(data.services ?? []), data.services ?? [], promoData.promotions ?? []));
       })
       .catch((err) => {
         setLoadError(err instanceof Error ? err.message : '無法載入設定');
@@ -168,10 +177,11 @@ export function WalkInBookingModal({
         ? syncWalkInDocument(
             applyBookingSlotToDocument(prev, { date, time: selectedTime, staff }),
             config.services,
+            promotions,
           )
         : prev,
     );
-  }, [config, date, staff, selectedTime]);
+  }, [config, date, staff, selectedTime, promotions]);
 
   const isShopClosed = useMemo(() => {
     if (!config || !date) return false;
@@ -233,6 +243,7 @@ export function WalkInBookingModal({
             handler: defaultHandler,
           },
           config.services,
+          promotions,
         ),
       );
     }
@@ -285,6 +296,7 @@ export function WalkInBookingModal({
       const document = syncWalkInDocument(
         applyBookingSlotToDocument(docState, { date, time: selectedTime, staff }),
         config.services,
+        promotions,
       );
       const res = await fetch('/api/admin/bookings', {
         method: 'POST',
@@ -320,12 +332,13 @@ export function WalkInBookingModal({
       ? {
           state: docState,
           services: config.services,
+          promotions,
           shopName: config.shopName,
           shopFullName: SHOP_FULL_NAME,
           shopAddress: SHOP_ADDRESS,
           shopPhone: SHOP_PHONE,
           onChange: (next: BookingDocumentState) =>
-            setDocState(syncWalkInDocument(next, config.services)),
+            setDocState(syncWalkInDocument(next, config.services, promotions)),
           fieldErrors,
           onFieldTouch: touchField,
           onFieldBlur: blurField,

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
 import { AdminServiceOptionsEditor } from '@/components/admin-service-options-editor';
 import type { AdminServiceRow, AdminSettingsData, ServiceOptionFormRow } from '@/lib/admin/settings';
+import type { AdminPromotionRow } from '@/lib/admin/promotions';
+import { AdminPromotionsSection } from '@/components/admin-promotions-section';
 import { formRowsToOptionsText, serviceOptionsToFormRows } from '@/lib/admin/settings';
 import { autoFillGenderOptionsText, suggestEnglishUnlessTouched } from '@/lib/admin/chinese-english-label';
 import {
@@ -13,7 +15,7 @@ import {
 } from '@/lib/admin/chinese-english-label-client';
 import { reorderListById } from '@/lib/admin/reorder-list';
 
-type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'security';
+type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'promotions' | 'security';
 
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -52,6 +54,7 @@ export function AdminSettingsPanel() {
   const [headcountOptions, setHeadcountOptions] = useState('');
   const [genderOptions, setGenderOptions] = useState('');
   const [services, setServices] = useState<AdminServiceRow[]>([]);
+  const [promotions, setPromotions] = useState<AdminPromotionRow[]>([]);
 
   const [newServiceName, setNewServiceName] = useState('');
   const [newServiceNameEn, setNewServiceNameEn] = useState('');
@@ -87,6 +90,7 @@ export function AdminSettingsPanel() {
     setHeadcountOptions(settings.headcountOptions);
     setGenderOptions(settings.genderOptions);
     setServices(settings.services);
+    setPromotions(settings.promotions ?? []);
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -102,6 +106,7 @@ export function AdminSettingsPanel() {
     }
     if (!res.ok) throw new Error(data.error || '無法載入設定');
     applySettings(data.settings);
+    setPromotions(data.promotions ?? data.settings?.promotions ?? []);
   }, [applySettings, router]);
 
   useEffect(() => {
@@ -422,6 +427,7 @@ export function AdminSettingsPanel() {
               ['booking', '預約規則'],
               ['form', '表單選項'],
               ['services', '服務項目'],
+              ['promotions', '優惠活動'],
               ['security', '安全復原'],
             ] as const
           ).map(([key, label]) => (
@@ -861,6 +867,18 @@ export function AdminSettingsPanel() {
               </button>
             </form>
           </div>
+        ) : null}
+
+        {tab === 'promotions' ? (
+          <AdminPromotionsSection
+            services={services}
+            promotions={promotions}
+            onReload={async () => {
+              await loadSettings();
+            }}
+            onMessage={setMessage}
+            onError={setError}
+          />
         ) : null}
 
         {tab === 'security' ? (

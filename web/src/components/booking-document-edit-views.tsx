@@ -18,10 +18,12 @@ import {
 import { ItemRowList, PaymentRowList, QuoteLineList } from '@/components/booking-document-line-list';
 import { ScheduleDateTimeFields } from '@/components/booking-schedule-fields';
 import { FormField } from '@/components/form-field';
+import { ServiceOptionPicker } from '@/components/service-option-picker';
 
 function ServiceFields({
   state,
   services,
+  promotions = [],
   onChange,
   fieldErrors,
   onFieldTouch,
@@ -41,7 +43,7 @@ function ServiceFields({
           value={state.service}
           onChange={(e) => {
             onFieldTouch?.('doc-service');
-            onChange(syncServiceChange(state, e.target.value, services));
+            onChange(syncServiceChange(state, e.target.value, services, promotions));
           }}
           onBlur={() => onFieldBlur?.('doc-service')}
         >
@@ -61,25 +63,21 @@ function ServiceFields({
         label="方案／功能"
         required={options.length > 0}
         optional={options.length === 0}
+        className="admin-field--full"
         hint={options.length > 0 ? '此服務需選擇方案' : '此服務無子方案'}
         error={fieldErrors?.['doc-service-option']}
       >
-        <select
+        <ServiceOptionPicker
           value={state.serviceOption}
+          options={options}
+          placeholder={serviceOptionPlaceholder(options.length)}
           disabled={!state.service || options.length === 0}
-          onChange={(e) => {
+          onChange={(next) => {
             onFieldTouch?.('doc-service-option');
-            onChange(syncServiceOptionChange(state, e.target.value, services));
+            onChange(syncServiceOptionChange(state, next, services, promotions));
           }}
           onBlur={() => onFieldBlur?.('doc-service-option')}
-        >
-          <option value="">{serviceOptionPlaceholder(options.length)}</option>
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        />
       </FormField>
     </div>
   );

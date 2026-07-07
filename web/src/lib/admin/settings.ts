@@ -1,4 +1,5 @@
 import { clearBookingConfigCache } from '@/lib/booking/config';
+import { loadAdminPromotions, type AdminPromotionRow } from '@/lib/admin/promotions';
 import { translateChineseLabel } from '@/lib/admin/chinese-english-label';
 import { translateEnglishLabel } from '@/lib/admin/english-label-translator';
 import { parseTime } from '@/lib/booking/time';
@@ -41,6 +42,7 @@ export type AdminSettingsData = {
   headcountOptions: string;
   genderOptions: string;
   services: AdminServiceRow[];
+  promotions: AdminPromotionRow[];
 };
 
 function parseOpenDays(raw: string): number[] {
@@ -222,12 +224,13 @@ async function writeSettingValue(key: string, value: string) {
 
 export async function loadAdminSettings(): Promise<AdminSettingsData> {
   const supabase = createAdminSupabaseClient();
-  const [{ data: settings, error: settingsError }, servicesResult] = await Promise.all([
+  const [{ data: settings, error: settingsError }, servicesResult, promotions] = await Promise.all([
     supabase.from('settings').select('key, value'),
     supabase
       .from('services')
       .select('id, sort_order, name, name_en, options_json, active, base_price')
       .order('sort_order'),
+    loadAdminPromotions(),
   ]);
 
   if (settingsError) throw new Error(settingsError.message);
@@ -285,6 +288,7 @@ export async function loadAdminSettings(): Promise<AdminSettingsData> {
         : [],
       active: Boolean(row.active),
     })),
+    promotions,
   };
 }
 

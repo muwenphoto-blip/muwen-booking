@@ -7,6 +7,8 @@ import type {
   DocumentPaymentRow,
 } from '@/lib/admin/booking-documents';
 import { serviceOptionsFor } from '@/lib/admin/booking-documents';
+import { applyItemRowAutoDiscount } from '@/lib/admin/document-discount';
+import type { AdminPromotionRow } from '@/lib/admin/promotions';
 import type { ServiceItem } from '@/lib/booking/types';
 
 export type BookingDocumentSharedProps = {
@@ -21,6 +23,7 @@ export type BookingDocumentSharedProps = {
   onFieldTouch?: (fieldId: string) => void;
   onFieldBlur?: (fieldId: string) => void;
   formMode?: 'default' | 'walk-in';
+  promotions?: AdminPromotionRow[];
   handlerOptions?: { value: string; label: string }[];
   scheduleConfig?: {
     openTime: string;
@@ -189,9 +192,19 @@ export function updateItemRowWithCalc(
   index: number,
   patch: Partial<DocumentItemRow>,
 ): BookingDocumentState {
-  const row = { ...state.itemRows[index], ...patch };
+  let row = { ...state.itemRows[index], ...patch };
+  if (patch.discount !== undefined && patch.discountMode === undefined) {
+    row.discountMode = 'manual';
+    row.promotionId = '';
+    row.promotionName = '';
+  }
+  if (patch.discountMode !== undefined && patch.discountMode !== row.discountMode) {
+    row.promotionId = '';
+    row.promotionName = '';
+  }
+  row = applyItemRowAutoDiscount(row);
   const itemTotal = calcItemRowTotal(row.price, row.discount, row.quantity);
-  return applyDocumentFinancialSync(updateItemRow(state, index, { ...patch, itemTotal }));
+  return applyDocumentFinancialSync(updateItemRow(state, index, { ...row, itemTotal }));
 }
 
 export function updateLineItem(
@@ -212,8 +225,9 @@ export function updateLineItem(
   }
   const itemRows = state.itemRows.map((row, i) => {
     if (i !== index) return row;
-    const merged = { ...row, ...itemPatch };
+    let merged = { ...row, ...itemPatch };
     if (itemPatch.price !== undefined || itemPatch.quantity !== undefined) {
+      merged = applyItemRowAutoDiscount(merged);
       merged.itemTotal = calcItemRowTotal(merged.price, merged.discount, merged.quantity);
     }
     return merged;

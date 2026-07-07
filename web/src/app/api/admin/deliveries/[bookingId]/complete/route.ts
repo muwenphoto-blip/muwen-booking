@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { isManagerRole } from '@/lib/admin/session';
 import { loadDeliveryByBookingId } from '@/lib/delivery/store';
+import { syncTransactionsFromDocument } from '@/lib/admin/finance';
+import { loadBookingDocumentState } from '@/lib/admin/booking-document-store';
+import { loadBookingConfig } from '@/lib/booking/config';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { isMissingColumnError } from '@/lib/supabase/errors';
 
@@ -37,6 +40,26 @@ export async function POST(_request: NextRequest, context: RouteContext) {
         throw new Error('請至 Supabase 執行 supabase/photo-delivery-v2.sql 以啟用交片完成功能');
       }
       throw new Error(error.message);
+    }
+
+    try {
+      const config = await loadBookingConfig();
+      const { data: booking } = await supabase
+        .from('bookings')
+        .select('id, case_number, customer_name, phone, email, note, service, staff_name, booking_date, booking_time, document_data')
+        .eq('id', bookingId)
+        .maybeSingle();
+      if (booking?.document_data) {
+        const document = loadBookingDocumentState(booking, config.services, '');
+        await syncTransactionsFromDocument(
+          bookingId,
+          booking.case_number || '',
+          document,
+          session.account,
+        );
+      }
+    } catch {
+      // transactions table may not exist yet
     }
 
     return NextResponse.json({
