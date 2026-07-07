@@ -1,12 +1,16 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminShell } from '@/components/admin-shell';
 import { AdminServiceOptionsEditor } from '@/components/admin-service-options-editor';
 import type { AdminServiceRow, AdminSettingsData, ServiceOptionFormRow } from '@/lib/admin/settings';
 import { formRowsToOptionsText, serviceOptionsToFormRows } from '@/lib/admin/settings';
 import { autoFillGenderOptionsText, suggestEnglishUnlessTouched } from '@/lib/admin/chinese-english-label';
+import {
+  fetchEnglishLabelSuggestion,
+  getLocalEnglishLabel,
+} from '@/lib/admin/chinese-english-label-client';
 import { reorderListById } from '@/lib/admin/reorder-list';
 
 type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'security';
@@ -63,6 +67,9 @@ export function AdminSettingsPanel() {
   const [draggingServiceId, setDraggingServiceId] = useState<string | null>(null);
   const [dragOverServiceId, setDragOverServiceId] = useState<string | null>(null);
   const [reorderingServices, setReorderingServices] = useState(false);
+  const serviceNameLookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editServiceLookupGen = useRef(0);
+  const newServiceLookupGen = useRef(0);
   const [recoveryConfigured, setRecoveryConfigured] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
   const [recoveryConfirm, setRecoveryConfirm] = useState('');
@@ -106,6 +113,99 @@ export function AdminSettingsPanel() {
       .then((data) => setRecoveryConfigured(Boolean(data.configured)))
       .catch(() => {});
   }, [loadSettings]);
+
+  useEffect(() => {
+    return () => {
+      if (serviceNameLookupTimer.current) clearTimeout(serviceNameLookupTimer.current);
+    };
+  }, []);
+
+  function queueServiceNameLookup(
+    chinese: string,
+    mode: 'edit' | 'new',
+    englishTouched: boolean,
+  ) {
+    if (englishTouched) return;
+    const trimmed = String(chinese || '').trim();
+    if (!trimmed) return;
+
+    if (serviceNameLookupTimer.current) clearTimeout(serviceNameLookupTimer.current);
+    const generationRef = mode === 'edit' ? editServiceLookupGen : newServiceLookupGen;
+    generationRef.current += 1;
+    const generation = generationRef.current;
+
+    serviceNameLookupTimer.current = setTimeout(() => {
+      void fetchEnglishLabelSuggestion(trimmed, 'service').then((suggested) => {
+        if (generationRef.current !== generation || !suggested) return;
+        if (mode === 'edit') {
+          setEditServiceNameEn((prev) => suggestEnglishUnlessTouched(trimmed, suggested, false));
+        } else {
+          setNewServiceNameEn((prev) => suggestEnglishUnlessTouched(trimmed, suggested, false));
+        }
+      });
+    }, 450);
+  }
+
+  function handleServiceNameChange(
+    nextName: string,
+    mode: 'edit' | 'new',
+    englishTouched: boolean,
+  ) {
+    const local = getLocalEnglishLabel(nextName);
+    if (mode === 'edit') {
+      setEditServiceName(nextName);
+      setEditServiceNameEn((prev) =>
+        englishTouched ? prev : local || suggestEnglishUnlessTouched(nextName, prev, false),
+      );
+      queueServiceNameLookup(nextName, 'edit', englishTouched);
+      return;
+    }
+
+    setNewServiceName(nextName);
+    setNewServiceNameEn((prev) =>
+      englishTouched ? prev : local || suggestEnglishUnlessTouched(nextName, prev, false),
+    );
+    queueServiceNameLookup(nextName, 'new', englishTouched);
+  }
+
+  async function hydrateServiceEnglishOnEdit(
+    name: string,
+    nameEn: string,
+    optionRows: ServiceOptionFormRow[],
+  ) {
+    const localName = getLocalEnglishLabel(name);
+    setEditServiceName(name);
+    setEditServiceNameEn(nameEn || localName || '');
+    setEditServiceNameEnTouched(false);
+    setEditServiceOptionRows(
+      optionRows.map((row) => ({
+        ...row,
+        labelEn: row.labelEn.trim() || getLocalEnglishLabel(row.label) || '',
+      })),
+    );
+
+    const [nameSuggestion, ...optionSuggestions] = await Promise.all([
+      nameEn ? Promise.resolve('') : fetchEnglishLabelSuggestion(name, 'service'),
+      ...optionRows.map((row) =>
+        row.labelEn.trim()
+          ? Promise.resolve('')
+          : fetchEnglishLabelSuggestion(row.label, 'option'),
+      ),
+    ]);
+
+    if (nameSuggestion) {
+      setEditServiceNameEn((prev) => prev || nameSuggestion);
+    }
+
+    if (optionSuggestions.some(Boolean)) {
+      setEditServiceOptionRows((prev) =>
+        prev.map((row, index) => ({
+          ...row,
+          labelEn: row.labelEn.trim() || optionSuggestions[index] || row.labelEn,
+        })),
+      );
+    }
+  }
 
   function toggleOpenDay(day: number) {
     setOpenDays((prev) =>
@@ -555,16 +655,23 @@ export function AdminSettingsPanel() {
                         <input
                           value={editServiceName}
                           onFocus={() => {
-                            setEditServiceNameEn((prev) =>
-                              suggestEnglishUnlessTouched(editServiceName, prev, editServiceNameEnTouched),
-                            );
+                            if (!editServiceNameEn.trim()) {
+                              const local = getLocalEnglishLabel(editServiceName);
+                              if (local) setEditServiceNameEn(local);
+                            }
+                            queueServiceNameLookup(editServiceName, 'edit', editServiceNameEnTouched);
                           }}
-                          onChange={(e) => {
-                            const nextName = e.target.value;
-                            setEditServiceName(nextName);
-                            setEditServiceNameEn((prev) =>
-                              suggestEnglishUnlessTouched(nextName, prev, editServiceNameEnTouched),
-                            );
+                          onChange={(e) =>
+                            handleServiceNameChange(e.target.value, 'edit', editServiceNameEnTouched)
+                          }
+                          onBlur={() => {
+                            if (!editServiceNameEn.trim()) {
+                              void fetchEnglishLabelSuggestion(editServiceName, 'service').then(
+                                (suggested) => {
+                                  if (suggested) setEditServiceNameEn(suggested);
+                                },
+                              );
+                            }
                           }}
                           required
                         />
@@ -646,13 +753,14 @@ export function AdminSettingsPanel() {
                           disabled={submitting}
                           onClick={() => {
                             setEditingServiceId(service.id);
-                            setEditServiceName(service.name);
-                            setEditServiceNameEn(service.name_en);
-                            setEditServiceNameEnTouched(false);
                             setEditServiceBasePrice(
                               service.options.length ? '' : formatServicePrice(service.base_price),
                             );
-                            setEditServiceOptionRows(serviceOptionsToFormRows(service.options));
+                            void hydrateServiceEnglishOnEdit(
+                              service.name,
+                              service.name_en,
+                              serviceOptionsToFormRows(service.options),
+                            );
                           }}
                         >
                           編輯
@@ -695,16 +803,23 @@ export function AdminSettingsPanel() {
                   <input
                     value={newServiceName}
                     onFocus={() => {
-                      setNewServiceNameEn((prev) =>
-                        suggestEnglishUnlessTouched(newServiceName, prev, newServiceNameEnTouched),
-                      );
+                      if (!newServiceNameEn.trim()) {
+                        const local = getLocalEnglishLabel(newServiceName);
+                        if (local) setNewServiceNameEn(local);
+                      }
+                      queueServiceNameLookup(newServiceName, 'new', newServiceNameEnTouched);
                     }}
-                    onChange={(e) => {
-                      const nextName = e.target.value;
-                      setNewServiceName(nextName);
-                      setNewServiceNameEn((prev) =>
-                        suggestEnglishUnlessTouched(nextName, prev, newServiceNameEnTouched),
-                      );
+                    onChange={(e) =>
+                      handleServiceNameChange(e.target.value, 'new', newServiceNameEnTouched)
+                    }
+                    onBlur={() => {
+                      if (!newServiceNameEn.trim()) {
+                        void fetchEnglishLabelSuggestion(newServiceName, 'service').then(
+                          (suggested) => {
+                            if (suggested) setNewServiceNameEn(suggested);
+                          },
+                        );
+                      }
                     }}
                     placeholder="如：證件照"
                     required

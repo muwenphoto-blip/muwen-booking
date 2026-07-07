@@ -1,8 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ServiceOptionFormRow } from '@/lib/admin/settings';
-import { suggestEnglishUnlessTouched, translateChineseLabel } from '@/lib/admin/chinese-english-label';
+import { suggestEnglishUnlessTouched } from '@/lib/admin/chinese-english-label';
+import {
+  fetchEnglishLabelSuggestion,
+  getLocalEnglishLabel,
+} from '@/lib/admin/chinese-english-label-client';
 
 type Props = {
   rows: ServiceOptionFormRow[];
@@ -15,6 +19,14 @@ function emptyRow(): ServiceOptionFormRow {
 
 export function AdminServiceOptionsEditor({ rows, onChange }: Props) {
   const [englishTouchedRows, setEnglishTouchedRows] = useState<Set<number>>(() => new Set());
+  const lookupTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const lookupGeneration = useRef<Record<number, number>>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(lookupTimers.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
 
   function updateRow(index: number, patch: Partial<ServiceOptionFormRow>) {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -32,11 +44,47 @@ export function AdminServiceOptionsEditor({ rows, onChange }: Props) {
     });
   }
 
-  function syncEnglish(index: number, label: string, currentEnglish: string) {
-    const suggested = suggestEnglishUnlessTouched(label, currentEnglish, englishTouchedRows.has(index));
-    if (suggested !== currentEnglish) {
-      updateRow(index, { labelEn: suggested });
+  function applySuggestedEnglish(index: number, label: string, suggested: string) {
+    if (!suggested || englishTouchedRows.has(index)) return;
+    const current = rows[index];
+    if (!current) return;
+    const next = suggestEnglishUnlessTouched(label, suggested, false);
+    if (next !== current.labelEn) {
+      updateRow(index, { labelEn: next });
     }
+  }
+
+  function queueEnglishLookup(index: number, label: string) {
+    if (englishTouchedRows.has(index)) return;
+
+    const trimmed = String(label || '').trim();
+    clearTimeout(lookupTimers.current[index]);
+    lookupGeneration.current[index] = (lookupGeneration.current[index] || 0) + 1;
+    const generation = lookupGeneration.current[index];
+
+    if (!trimmed) return;
+
+    lookupTimers.current[index] = setTimeout(() => {
+      void fetchEnglishLabelSuggestion(trimmed, 'option').then((suggested) => {
+        if (lookupGeneration.current[index] !== generation) return;
+        applySuggestedEnglish(index, trimmed, suggested);
+      });
+    }, 450);
+  }
+
+  function syncEnglish(index: number, label: string, currentEnglish: string, force = false) {
+    const trimmed = String(currentEnglish || '').trim();
+    const local = getLocalEnglishLabel(label);
+
+    if (force && !trimmed && local) {
+      updateRow(index, { labelEn: local });
+    }
+
+    if (!englishTouchedRows.has(index) && local) {
+      applySuggestedEnglish(index, label, local);
+    }
+
+    queueEnglishLookup(index, label);
   }
 
   return (
@@ -44,7 +92,7 @@ export function AdminServiceOptionsEditor({ rows, onChange }: Props) {
       <div className="admin-service-options-editor__head">
         <span>子方案與金額</span>
         <p className="admin-muted">
-          有子方案時，請為每個方案填寫金額；輸入中文方案名稱會自動帶入英文（手動修改英文後將不再覆寫）。
+          輸入中文方案名稱會自動帶入自然英文（優先攝影業慣用語；可選 DeepL 美式英文）。手動修改英文後將不再覆寫。
         </p>
       </div>
       {rows.length ? (
@@ -56,16 +104,17 @@ export function AdminServiceOptionsEditor({ rows, onChange }: Props) {
                 <input
                   value={row.label}
                   onFocus={() => syncEnglish(index, row.label, row.labelEn)}
+                  onBlur={() => syncEnglish(index, row.label, row.labelEn, true)}
                   onChange={(e) => {
                     const nextLabel = e.target.value;
+                    const local = getLocalEnglishLabel(nextLabel);
                     updateRow(index, {
                       label: nextLabel,
-                      labelEn: suggestEnglishUnlessTouched(
-                        nextLabel,
-                        row.labelEn,
-                        englishTouchedRows.has(index),
-                      ),
+                      labelEn: englishTouchedRows.has(index)
+                        ? row.labelEn
+                        : local || row.labelEn,
                     });
+                    queueEnglishLookup(index, nextLabel);
                   }}
                   placeholder="如：半身"
                 />
@@ -78,7 +127,7 @@ export function AdminServiceOptionsEditor({ rows, onChange }: Props) {
                     setEnglishTouchedRows((prev) => new Set(prev).add(index));
                     updateRow(index, { labelEn: e.target.value });
                   }}
-                  placeholder="Half Body"
+                  placeholder="Half-Length Portraits"
                 />
               </label>
               <label className="admin-field">

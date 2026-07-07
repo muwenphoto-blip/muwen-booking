@@ -1,5 +1,6 @@
 import { clearBookingConfigCache } from '@/lib/booking/config';
 import { translateChineseLabel } from '@/lib/admin/chinese-english-label';
+import { translateEnglishLabel } from '@/lib/admin/english-label-translator';
 import { parseTime } from '@/lib/booking/time';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -97,11 +98,19 @@ function parseNonNegativeInt(raw: unknown, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-function fillServiceOptionEnglish<T extends { label: string; labelEn: string }>(options: T[]): T[] {
-  return options.map((opt) => ({
-    ...opt,
-    labelEn: String(opt.labelEn || '').trim() || translateChineseLabel(opt.label) || '',
-  }));
+async function fillServiceOptionEnglish<T extends { label: string; labelEn: string }>(
+  options: T[],
+): Promise<T[]> {
+  const filled: T[] = [];
+  for (const opt of options) {
+    const labelEn =
+      String(opt.labelEn || '').trim() ||
+      (await translateEnglishLabel(opt.label, 'option')) ||
+      translateChineseLabel(opt.label) ||
+      '';
+    filled.push({ ...opt, labelEn });
+  }
+  return filled;
 }
 
 export function parseServiceOptionsText(
@@ -362,10 +371,15 @@ export async function saveAdminSettingsForm(
   genderText: string,
 ) {
   const headcountOptions = parseHeadcountOptions(headcountText);
-  const genderOptions = parseGenderOptionsText(genderText).map((item) => ({
-    ...item,
-    en: item.en || translateChineseLabel(item.value),
-  }));
+  const genderOptions = await Promise.all(
+    parseGenderOptionsText(genderText).map(async (item) => ({
+      ...item,
+      en:
+        item.en ||
+        (await translateEnglishLabel(item.value, 'gender')) ||
+        translateChineseLabel(item.value),
+    })),
+  );
   if (!headcountOptions.length) throw new Error('請至少填一個人數選項');
   if (!genderOptions.length) throw new Error('請至少填一個性別選項');
 
@@ -384,7 +398,10 @@ export async function addAdminService(
   basePriceText = '',
 ) {
   name = String(name || '').trim();
-  nameEn = String(nameEn || '').trim() || translateChineseLabel(name);
+  nameEn =
+    String(nameEn || '').trim() ||
+    (await translateEnglishLabel(name, 'service')) ||
+    translateChineseLabel(name);
   if (name.length < 2) throw new Error('服務名稱至少 2 字');
 
   const supabase = createAdminSupabaseClient();
@@ -398,7 +415,7 @@ export async function addAdminService(
     .limit(1)
     .maybeSingle();
 
-  const options = fillServiceOptionEnglish(
+  const options = await fillServiceOptionEnglish(
     serializeServiceOptionsForDb(parseServiceOptionsText(optionsText)),
   );
   const basePrice = parseBasePrice(basePriceText);
@@ -458,10 +475,13 @@ export async function updateAdminService(
   if (payload.nameEn !== undefined) {
     const nameForEn = String(payload.name ?? row.name).trim();
     const rawEn = String(payload.nameEn).trim();
-    updates.name_en = rawEn || translateChineseLabel(nameForEn);
+    updates.name_en =
+      rawEn ||
+      (await translateEnglishLabel(nameForEn, 'service')) ||
+      translateChineseLabel(nameForEn);
   }
   if (payload.optionsText !== undefined) {
-    updates.options_json = fillServiceOptionEnglish(
+    updates.options_json = await fillServiceOptionEnglish(
       serializeServiceOptionsForDb(parseServiceOptionsText(payload.optionsText)),
     );
   }
