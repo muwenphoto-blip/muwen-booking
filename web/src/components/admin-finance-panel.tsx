@@ -64,6 +64,19 @@ function sourceLabel(source: string): string {
   return source;
 }
 
+function localizeLoadError(message: string): string {
+  if (/load failed|failed to fetch|networkerror/i.test(message)) {
+    return '網路連線失敗，請重新整理後再試';
+  }
+  return message || '載入失敗';
+}
+
+type FinanceFormOptions = {
+  caseOptions: Array<{ bookingId: string; caseNumber: string; label: string }>;
+  receivers: string[];
+  paymentMethods: string[];
+};
+
 const TX_PAGE_SIZE = 40;
 
 export function AdminFinancePanel() {
@@ -84,6 +97,7 @@ export function AdminFinancePanel() {
   const [depreciationInput, setDepreciationInput] = useState('');
   const [view, setView] = useState<'finance' | 'assets'>('finance');
   const [txPage, setTxPage] = useState(0);
+  const [formOptions, setFormOptions] = useState<FinanceFormOptions | null>(null);
 
   const navigation = useMemo(() => getFinanceNavigation(period, anchor), [period, anchor]);
   const txPageCount = Math.max(1, Math.ceil(transactions.length / TX_PAGE_SIZE));
@@ -107,28 +121,79 @@ export function AdminFinancePanel() {
       });
       if (typeFilter) txParams.set('type', typeFilter);
 
-      const [summaryRes, txRes, reportRes] = await Promise.all([
-        fetch(`/api/admin/finance/summary?${summaryParams}`),
-        fetch(`/api/admin/finance/transactions?${txParams}`),
-        fetch(`/api/admin/finance/report?${summaryParams}&lite=1`),
+      const [summaryResult, txResult, reportResult] = await Promise.allSettled([
+        fetch(`/api/admin/finance/summary?${summaryParams}`).then(async (res) => {
+          const data = await res.json();
+          return { res, data };
+        }),
+        fetch(`/api/admin/finance/transactions?${txParams}`).then(async (res) => {
+          const data = await res.json();
+          return { res, data };
+        }),
+        fetch(`/api/admin/finance/report?${summaryParams}&lite=1`).then(async (res) => {
+          const data = await res.json();
+          return { res, data };
+        }),
       ]);
-      const summaryData = await summaryRes.json();
-      const txData = await txRes.json();
-      const reportData = await reportRes.json();
 
-      if (summaryRes.status === 401 || txRes.status === 401 || reportRes.status === 401) {
-        router.replace('/admin');
-        return;
+      const failures: string[] = [];
+
+      if (summaryResult.status === 'fulfilled') {
+        const { res, data } = summaryResult.value;
+        if (res.status === 401) {
+          router.replace('/admin');
+          return;
+        }
+        if (!res.ok) {
+          failures.push(data.error || '無法載入統計');
+          setSummary(null);
+        } else {
+          setSummary(data.summary);
+        }
+      } else {
+        failures.push(localizeLoadError(String(summaryResult.reason)));
+        setSummary(null);
       }
-      if (!summaryRes.ok) throw new Error(summaryData.error || '無法載入統計');
-      if (!txRes.ok) throw new Error(txData.error || '無法載入收支紀錄');
-      if (!reportRes.ok) throw new Error(reportData.error || '無法載入會計報表');
 
-      setSummary(summaryData.summary);
-      setAccountingReport(reportData.report);
-      setTransactions(txData.transactions ?? []);
+      if (txResult.status === 'fulfilled') {
+        const { res, data } = txResult.value;
+        if (res.status === 401) {
+          router.replace('/admin');
+          return;
+        }
+        if (!res.ok) {
+          failures.push(data.error || '無法載入收支紀錄');
+          setTransactions([]);
+        } else {
+          setTransactions(data.transactions ?? []);
+        }
+      } else {
+        failures.push(localizeLoadError(String(txResult.reason)));
+        setTransactions([]);
+      }
+
+      if (reportResult.status === 'fulfilled') {
+        const { res, data } = reportResult.value;
+        if (res.status === 401) {
+          router.replace('/admin');
+          return;
+        }
+        if (!res.ok) {
+          failures.push(data.error || '無法載入會計報表');
+          setAccountingReport(null);
+        } else {
+          setAccountingReport(data.report);
+        }
+      } else {
+        failures.push(localizeLoadError(String(reportResult.reason)));
+        setAccountingReport(null);
+      }
+
+      if (failures.length) {
+        setError(failures.join('；'));
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '載入失敗');
+      setError(localizeLoadError(err instanceof Error ? err.message : '載入失敗'));
       setSummary(null);
       setAccountingReport(null);
       setTransactions([]);
@@ -136,6 +201,25 @@ export function AdminFinancePanel() {
       setLoading(false);
     }
   }, [anchor, navigation.from, navigation.to, period, router, typeFilter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/finance/options')
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '無法載入選項');
+        return data as FinanceFormOptions;
+      })
+      .then((data) => {
+        if (!cancelled) setFormOptions(data);
+      })
+      .catch(() => {
+        if (!cancelled) setFormOptions({ caseOptions: [], receivers: [], paymentMethods: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -776,24 +860,56 @@ export function AdminFinancePanel() {
                 </label>
                 <label className="admin-field">
                   <span>案件編號（選填）</span>
-                  <input
+                  <select
                     value={form.caseNumber}
                     onChange={(e) => setForm((prev) => ({ ...prev, caseNumber: e.target.value }))}
-                  />
+                  >
+                    <option value="">不指定案件</option>
+                    {form.caseNumber &&
+                    !formOptions?.caseOptions.some((item) => item.caseNumber === form.caseNumber) ? (
+                      <option value={form.caseNumber}>{form.caseNumber}（目前值）</option>
+                    ) : null}
+                    {(formOptions?.caseOptions ?? []).map((item) => (
+                      <option key={`${item.bookingId}-${item.caseNumber}`} value={item.caseNumber}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="admin-field">
                   <span>付款方式（選填）</span>
-                  <input
+                  <select
                     value={form.paymentMethod}
                     onChange={(e) => setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
-                  />
+                  >
+                    <option value="">請選擇</option>
+                    {form.paymentMethod &&
+                    !formOptions?.paymentMethods.includes(form.paymentMethod) ? (
+                      <option value={form.paymentMethod}>{form.paymentMethod}（目前值）</option>
+                    ) : null}
+                    {(formOptions?.paymentMethods ?? []).map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="admin-field">
                   <span>經手人（選填）</span>
-                  <input
+                  <select
                     value={form.receiver}
                     onChange={(e) => setForm((prev) => ({ ...prev, receiver: e.target.value }))}
-                  />
+                  >
+                    <option value="">請選擇</option>
+                    {form.receiver && !formOptions?.receivers.includes(form.receiver) ? (
+                      <option value={form.receiver}>{form.receiver}（目前值）</option>
+                    ) : null}
+                    {(formOptions?.receivers ?? []).map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="admin-field admin-field--full">
                   <span>備註（選填）</span>

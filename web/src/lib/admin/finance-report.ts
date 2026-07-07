@@ -124,9 +124,13 @@ export async function loadFinanceAccountingReport(
   const range = getFinancePeriodRange(period, anchor);
   const monthKey = monthKeyFromIsoDate(range.from);
   const txLimit = options?.transactionLimit ?? 5000;
-  const assets = await loadAdminAssets();
-  if (assets.length) {
-    await syncMonthDepreciationFromAssets(monthKey);
+  try {
+    const assets = await loadAdminAssets();
+    if (assets.length) {
+      await syncMonthDepreciationFromAssets(monthKey);
+    }
+  } catch {
+    // 器材表未建立或同步失敗時，仍應能載入財務報表
   }
   const [summary, transactions, equipmentDepreciation, performance] = await Promise.all([
     loadFinanceSummary(period, anchor),

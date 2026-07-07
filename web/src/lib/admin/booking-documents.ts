@@ -52,7 +52,7 @@ export const EMPTY_ITEM_DISCOUNT_RULE: Pick<
   discountGroupFree: '',
 };
 
-export type DocumentPaymentKind = 'deposit' | 'full' | 'balance' | '';
+export type DocumentPaymentKind = 'deposit' | 'full' | 'balance' | 'refund' | '';
 
 export type DocumentPaymentRow = {
   date: string;

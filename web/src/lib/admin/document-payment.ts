@@ -24,6 +24,7 @@ export function resolvePaymentAmountForKind(
   documentTotal: number,
   deposit: number,
 ): number {
+  if (kind === 'refund') return 0;
   if (kind === 'full') return documentTotal;
   if (kind === 'deposit') return Math.max(0, deposit);
   if (kind === 'balance') return Math.max(0, documentTotal - deposit);
@@ -34,10 +35,12 @@ export function paymentKindLabel(kind: DocumentPaymentKind): string {
   if (kind === 'full') return '全額';
   if (kind === 'deposit') return '訂金（預付）';
   if (kind === 'balance') return '尾款（剩餘）';
+  if (kind === 'refund') return '退款';
   return '付款';
 }
 
 export function paymentCategoryForRow(row: DocumentPaymentRow, index: number): string {
+  if (row.paymentKind === 'refund') return '退款';
   if (row.paymentKind === 'deposit') return '訂金';
   if (row.paymentKind === 'balance') return '尾款';
   if (row.paymentKind === 'full') return '拍攝收款';
@@ -185,32 +188,42 @@ export function sumDocumentPaymentAmounts(state: BookingDocumentState): number {
 
 type PaymentRowRef = { payment: DocumentPaymentRow; index: number };
 
-/** 決定要寫入財務的付款列，避免全額+訂金+尾款重複入帳 */
-export function selectPaymentsForFinanceSync(
+export function partitionPaymentsForFinanceSync(
   state: BookingDocumentState,
   services: ServiceItem[],
-): { rows: PaymentRowRef[]; errors: string[] } {
+): { incomeRows: PaymentRowRef[]; refundRows: PaymentRowRef[]; errors: string[] } {
   const documentTotal = Math.round(getDocumentGrandTotal(state, services));
   const withAmount: PaymentRowRef[] = (state.payments || [])
     .map((payment, index) => ({ payment, index }))
     .filter(({ payment }) => parseAmount(payment.amount) > 0);
 
-  const fullRows = withAmount.filter(({ payment }) => payment.paymentKind === 'full');
+  const refundRows = withAmount.filter(({ payment }) => payment.paymentKind === 'refund');
+  const incomeCandidates = withAmount.filter(({ payment }) => payment.paymentKind !== 'refund');
+
+  const fullRows = incomeCandidates.filter(({ payment }) => payment.paymentKind === 'full');
   if (fullRows.length) {
-    const syncErrors =
-      fullRows.length > 1 ? ['有多筆全額付款，僅同步第一筆至財務'] : [];
-    return { rows: [fullRows[0]], errors: syncErrors };
+    const errors = fullRows.length > 1 ? ['有多筆全額付款，僅同步第一筆至財務'] : [];
+    return { incomeRows: [fullRows[0]], refundRows, errors };
   }
 
-  const rows = withAmount;
-  const total = rows.reduce((sum, { payment }) => sum + parseAmount(payment.amount), 0);
+  const total = incomeCandidates.reduce((sum, { payment }) => sum + parseAmount(payment.amount), 0);
   if (documentTotal > 0 && total > documentTotal) {
     return {
-      rows: [],
+      incomeRows: [],
+      refundRows,
       errors: [
         `收款合計 NT$ ${total.toLocaleString('zh-Hant-TW')} 超過應收 NT$ ${documentTotal.toLocaleString('zh-Hant-TW')}，請刪除多餘付款或改為正確類型（全額／訂金／尾款）`,
       ],
     };
   }
-  return { rows, errors: [] };
+  return { incomeRows: incomeCandidates, refundRows, errors: [] };
+}
+
+/** @deprecated use partitionPaymentsForFinanceSync */
+export function selectPaymentsForFinanceSync(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): { rows: PaymentRowRef[]; errors: string[] } {
+  const { incomeRows, errors } = partitionPaymentsForFinanceSync(state, services);
+  return { rows: incomeRows, errors };
 }

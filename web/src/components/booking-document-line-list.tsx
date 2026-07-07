@@ -565,9 +565,21 @@ export function QuoteLineList({ state, onChange }: QuoteLineListProps) {
   );
 }
 
+type PaymentDraft = {
+  date: string;
+  paymentKind: DocumentPaymentKind;
+  amount: string;
+  customerSignature: string;
+  receiver: string;
+};
+
+function isPaymentDraftFilled(draft: PaymentDraft): boolean {
+  return Boolean(draft.date && draft.paymentKind && parseAmount(draft.amount) > 0);
+}
+
 type PaymentRowListProps = BookingDocumentSharedProps;
 
-export function PaymentRowList({ state, onChange, services }: PaymentRowListProps) {
+export function PaymentRowList({ state, onChange, services, handlerOptions }: PaymentRowListProps) {
   const { documentTotal, deposit, balanceDue } = documentTotals(state, services);
   const filledIndices = useMemo(
     () => state.payments.map((row, i) => (isPaymentFilled(row) ? i : -1)).filter((i) => i >= 0),
@@ -575,6 +587,7 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
   );
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [draftIndex, setDraftIndex] = useState<number | null>(null);
+  const [paymentDraft, setPaymentDraft] = useState<PaymentDraft | null>(null);
 
   const canAdd = findFirstEmptyIndex(state.payments, isPaymentFilled) >= 0;
 
@@ -583,27 +596,42 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
     if (index >= state.payments.length) return;
     const defaultKind: DocumentPaymentKind = deposit > 0 ? 'balance' : 'deposit';
     const amount = resolvePaymentAmountForKind(defaultKind, documentTotal, deposit);
-    onChange(
-      updatePayment(state, index, {
-        date: todayIsoDate(),
-        paymentKind: defaultKind,
-        amount: amount > 0 ? String(amount) : '',
-        customerSignature: '',
-        receiver: '',
-      }),
-    );
+    setPaymentDraft({
+      date: todayIsoDate(),
+      paymentKind: defaultKind,
+      amount: amount > 0 ? String(amount) : '',
+      customerSignature: '',
+      receiver: '',
+    });
     setDraftIndex(index);
     setEditingIndex(index);
   }
 
-  function updatePaymentKind(index: number, kind: DocumentPaymentKind) {
+  function openEdit(index: number) {
+    const row = state.payments[index];
+    setPaymentDraft({
+      date: toPaymentDateInputValue(row.date) || row.date,
+      paymentKind: row.paymentKind || '',
+      amount: row.amount,
+      customerSignature: row.customerSignature,
+      receiver: row.receiver,
+    });
+    setDraftIndex(null);
+    setEditingIndex(index);
+  }
+
+  function updateDraftKind(kind: DocumentPaymentKind) {
+    if (!paymentDraft) return;
+    if (kind === 'refund') {
+      setPaymentDraft({ ...paymentDraft, paymentKind: kind });
+      return;
+    }
     const amount = resolvePaymentAmountForKind(kind, documentTotal, deposit);
-    onChange(
-      updatePayment(state, index, {
-        paymentKind: kind,
-        amount: amount > 0 ? String(amount) : '',
-      }),
-    );
+    setPaymentDraft({
+      ...paymentDraft,
+      paymentKind: kind,
+      amount: amount > 0 ? String(amount) : '',
+    });
   }
 
   function updateDepositPercent(choice: DepositPercentChoice) {
@@ -611,21 +639,23 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
   }
 
   function finishEdit(index: number) {
-    if (!isPaymentFilled(state.payments[index])) return;
+    if (!paymentDraft || !isPaymentDraftFilled(paymentDraft)) return;
+    onChange(
+      updatePayment(state, index, {
+        date: paymentDraft.date,
+        paymentKind: paymentDraft.paymentKind,
+        amount: paymentDraft.amount,
+        customerSignature: paymentDraft.customerSignature,
+        receiver: paymentDraft.receiver,
+      }),
+    );
+    setPaymentDraft(null);
     setEditingIndex(null);
     setDraftIndex(null);
   }
 
-  function cancelEdit(index: number) {
-    if (draftIndex === index && !filledIndices.includes(index)) {
-      onChange(updatePayment(state, index, {
-        date: '',
-        amount: '',
-        customerSignature: '',
-        receiver: '',
-        paymentKind: '',
-      }));
-    }
+  function cancelEdit() {
+    setPaymentDraft(null);
     setEditingIndex(null);
     setDraftIndex(null);
   }
@@ -638,8 +668,11 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
       receiver: '',
       paymentKind: '',
     }));
-    if (editingIndex === index) setEditingIndex(null);
+    if (editingIndex === index) cancelEdit();
   }
+
+  const draft = paymentDraft;
+  const isRefundDraft = draft?.paymentKind === 'refund';
 
   return (
     <div className="booking-doc-row-list">
@@ -657,7 +690,7 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
               <button
                 type="button"
                 className="admin-button secondary"
-                onClick={() => setEditingIndex(index)}
+                onClick={() => openEdit(index)}
               >
                 編輯
               </button>
@@ -673,7 +706,7 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
         );
       })}
 
-      {editingIndex !== null ? (
+      {editingIndex !== null && draft ? (
         <div className="booking-doc-row-editor">
           <div className="booking-doc-row-editor-head">
             <strong>{draftIndex === editingIndex ? '新增付款' : `編輯付款 ${editingIndex + 1}`}</strong>
@@ -689,121 +722,152 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
                 placeholder="請先填寫服務明細"
               />
             </label>
-            <label className="admin-field">
-              <span>預付訂金</span>
-              <select
-                value={state.depositPercent || (state.deposit ? 'custom' : '')}
-                onChange={(e) => updateDepositPercent(e.target.value as DepositPercentChoice)}
-              >
-                <option value="">選擇預付比例</option>
-                {DEPOSIT_PERCENT_OPTIONS.map((percent) => (
-                  <option key={percent} value={String(percent)}>
-                    {percent}%（
-                    {documentTotal > 0
-                      ? calcDepositFromPercent(documentTotal, percent).toLocaleString('zh-Hant-TW')
-                      : '依總額計算'}
-                    ）
-                  </option>
-                ))}
-                <option value="custom">自訂金額</option>
-              </select>
-            </label>
-            <label className="admin-field">
-              <span>訂金金額</span>
-              <input
-                type="number"
-                min={0}
-                inputMode="numeric"
-                value={state.deposit}
-                readOnly={state.depositPercent !== 'custom' && Boolean(state.depositPercent)}
-                className={
-                  state.depositPercent !== 'custom' && state.depositPercent
-                    ? 'booking-doc-readonly-field'
-                    : undefined
-                }
-                placeholder={documentTotal > 0 ? '0' : '請先填寫服務明細'}
-                onChange={(e) =>
-                  onChange({
-                    ...state,
-                    depositPercent: 'custom',
-                    deposit: e.target.value,
-                  })
-                }
-              />
-            </label>
+            {!isRefundDraft ? (
+              <>
+                <label className="admin-field">
+                  <span>預付訂金</span>
+                  <select
+                    value={state.depositPercent || (state.deposit ? 'custom' : '')}
+                    onChange={(e) => updateDepositPercent(e.target.value as DepositPercentChoice)}
+                  >
+                    <option value="">選擇預付比例</option>
+                    {DEPOSIT_PERCENT_OPTIONS.map((percent) => (
+                      <option key={percent} value={String(percent)}>
+                        {percent}%（
+                        {documentTotal > 0
+                          ? calcDepositFromPercent(documentTotal, percent).toLocaleString('zh-Hant-TW')
+                          : '依總額計算'}
+                        ）
+                      </option>
+                    ))}
+                    <option value="custom">自訂金額</option>
+                  </select>
+                </label>
+                <label className="admin-field">
+                  <span>訂金金額</span>
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={state.deposit}
+                    readOnly={state.depositPercent !== 'custom' && Boolean(state.depositPercent)}
+                    className={
+                      state.depositPercent !== 'custom' && state.depositPercent
+                        ? 'booking-doc-readonly-field'
+                        : undefined
+                    }
+                    placeholder={documentTotal > 0 ? '0' : '請先填寫服務明細'}
+                    onChange={(e) =>
+                      onChange({
+                        ...state,
+                        depositPercent: 'custom',
+                        deposit: e.target.value,
+                      })
+                    }
+                  />
+                </label>
+              </>
+            ) : null}
             <label className="admin-field">
               <span>付款類型</span>
               <select
-                value={state.payments[editingIndex].paymentKind || ''}
-                onChange={(e) =>
-                  updatePaymentKind(editingIndex, e.target.value as DocumentPaymentKind)
-                }
+                value={draft.paymentKind || ''}
+                onChange={(e) => updateDraftKind(e.target.value as DocumentPaymentKind)}
               >
                 <option value="">請選擇</option>
                 <option value="deposit">訂金（預付）</option>
                 <option value="full">全額</option>
                 <option value="balance">尾款（剩餘）</option>
+                <option value="refund">退款</option>
               </select>
             </label>
             <label className="admin-field">
-              <span>實收金額</span>
+              <span>{isRefundDraft ? '退款金額' : '實收金額'}</span>
               <input
-                className="booking-doc-readonly-field"
-                readOnly
-                tabIndex={-1}
-                value={state.payments[editingIndex].amount}
-                placeholder="依付款類型自動帶入"
-              />
-            </label>
-            <label className="admin-field">
-              <span>參考：全額 / 尾款</span>
-              <input
-                className="booking-doc-readonly-field"
-                readOnly
-                tabIndex={-1}
-                value={
-                  documentTotal > 0
-                    ? `全額 ${documentTotal}｜尾款 ${balanceDue}`
-                    : ''
+                type="number"
+                min={1}
+                inputMode="numeric"
+                className={isRefundDraft ? undefined : 'booking-doc-readonly-field'}
+                readOnly={!isRefundDraft}
+                tabIndex={isRefundDraft ? 0 : -1}
+                value={draft.amount}
+                placeholder={isRefundDraft ? '請輸入退款金額' : '依付款類型自動帶入'}
+                onChange={(e) =>
+                  setPaymentDraft((prev) => (prev ? { ...prev, amount: e.target.value } : prev))
                 }
               />
             </label>
+            {!isRefundDraft ? (
+              <label className="admin-field">
+                <span>參考：全額 / 尾款</span>
+                <input
+                  className="booking-doc-readonly-field"
+                  readOnly
+                  tabIndex={-1}
+                  value={
+                    documentTotal > 0
+                      ? `全額 ${documentTotal}｜尾款 ${balanceDue}`
+                      : ''
+                  }
+                />
+              </label>
+            ) : null}
             <label className="admin-field">
               <span>付款日期</span>
               <input
                 type="date"
-                value={toPaymentDateInputValue(state.payments[editingIndex].date)}
+                value={toPaymentDateInputValue(draft.date)}
                 onChange={(e) =>
-                  onChange(updatePayment(state, editingIndex, { date: e.target.value }))
+                  setPaymentDraft((prev) => (prev ? { ...prev, date: e.target.value } : prev))
                 }
               />
             </label>
             <label className="admin-field">
               <span>客戶簽名</span>
               <input
-                value={state.payments[editingIndex].customerSignature}
+                value={draft.customerSignature}
                 onChange={(e) =>
-                  onChange(updatePayment(state, editingIndex, {
-                    customerSignature: e.target.value,
-                  }))
+                  setPaymentDraft((prev) =>
+                    prev ? { ...prev, customerSignature: e.target.value } : prev,
+                  )
                 }
               />
             </label>
             <label className="admin-field">
               <span>收款人</span>
-              <input
-                value={state.payments[editingIndex].receiver}
-                onChange={(e) =>
-                  onChange(updatePayment(state, editingIndex, { receiver: e.target.value }))
-                }
-              />
+              {handlerOptions?.length ? (
+                <select
+                  value={draft.receiver}
+                  onChange={(e) =>
+                    setPaymentDraft((prev) => (prev ? { ...prev, receiver: e.target.value } : prev))
+                  }
+                >
+                  <option value="">請選擇</option>
+                  {draft.receiver &&
+                  !handlerOptions.some((option) => option.value === draft.receiver) ? (
+                    <option value={draft.receiver}>{draft.receiver}</option>
+                  ) : null}
+                  {handlerOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={draft.receiver}
+                  onChange={(e) =>
+                    setPaymentDraft((prev) => (prev ? { ...prev, receiver: e.target.value } : prev))
+                  }
+                />
+              )}
             </label>
           </div>
           <div className="booking-doc-row-editor-actions">
             <button
               type="button"
               className="admin-button"
-              disabled={!isPaymentFilled(state.payments[editingIndex])}
+              disabled={!isPaymentDraftFilled(draft)}
               onClick={() => finishEdit(editingIndex)}
             >
               完成
@@ -811,7 +875,7 @@ export function PaymentRowList({ state, onChange, services }: PaymentRowListProp
             <button
               type="button"
               className="admin-button secondary"
-              onClick={() => cancelEdit(editingIndex)}
+              onClick={cancelEdit}
             >
               取消
             </button>

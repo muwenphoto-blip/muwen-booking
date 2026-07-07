@@ -2,7 +2,7 @@ import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import {
   paymentCategoryForRow,
   prepareDocumentPaymentsForSync,
-  selectPaymentsForFinanceSync,
+  partitionPaymentsForFinanceSync,
   sumDocumentPaymentAmounts,
 } from '@/lib/admin/document-payment';
 import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
@@ -98,6 +98,8 @@ export type FinanceAccountingReport = {
 export const INCOME_CATEGORIES = ['拍攝收款', '訂金', '尾款', '加購', '其他收入'] as const;
 export const EXPENSE_CATEGORIES = ['人事', '器材', '器材損耗', '租棚', '行銷', '雜支', '其他支出'] as const;
 export const REFUND_CATEGORIES = ['退款', '其他退款'] as const;
+
+export const PAYMENT_METHOD_OPTIONS = ['現金', '轉帳', '信用卡', 'Line Pay', '其他'] as const;
 
 function mapTransactionRow(row: {
   id: string;
@@ -560,7 +562,7 @@ export async function syncTransactionsFromDocument(
   const supabase = createAdminSupabaseClient();
   const errors: string[] = [];
   const prepared = prepareDocumentPaymentsForSync(document, services);
-  const { rows: paymentRows, errors: paymentErrors } = selectPaymentsForFinanceSync(
+  const { incomeRows: paymentRows, refundRows, errors: paymentErrors } = partitionPaymentsForFinanceSync(
     prepared,
     services,
   );
@@ -595,20 +597,40 @@ export async function syncTransactionsFromDocument(
     });
   }
 
+  for (const { payment, index } of refundRows) {
+    const amount = Math.round(parseAmount(payment.amount));
+    if (amount <= 0) continue;
+
+    rowsToInsert.push({
+      booking_id: bookingId,
+      case_number: caseNumber || prepared.caseNumber || '',
+      transaction_date: parseTransactionDate(payment.date || fallbackDate),
+      type: 'refund',
+      category: '退款',
+      amount,
+      payment_method: '',
+      receiver: String(payment.receiver || '').trim(),
+      note: String(payment.customerSignature || '').trim(),
+      source: 'document_payment',
+      source_ref: `refund-${index}`,
+      created_by: createdBy,
+    });
+  }
+
   const depositAmount = Math.round(parseAmount(prepared.deposit));
   const hasDepositPayment = (prepared.payments || []).some(
     (row) => row.paymentKind === 'deposit' && parseAmount(row.amount) > 0,
   );
-  const hasAnyPayment = rowsToInsert.length > 0;
+  const hasIncomePayment = paymentRows.some(({ payment }) => parseAmount(payment.amount) > 0);
 
   const documentTotal = Math.round(getDocumentGrandTotal(prepared, services));
-  if (documentTotal > 0 && !hasAnyPayment && depositAmount <= 0) {
+  if (documentTotal > 0 && !hasIncomePayment && refundRows.length === 0 && depositAmount <= 0) {
     errors.push('已填寫應收總額但尚無收款紀錄，請在付款紀錄新增訂金、全額或尾款');
     return { synced: 0, errors };
   }
 
   // 僅同步付款紀錄列，避免訂金欄位與付款列重複入帳
-  if (!hasAnyPayment && depositAmount > 0 && !hasDepositPayment) {
+  if (!hasIncomePayment && depositAmount > 0 && !hasDepositPayment) {
     rowsToInsert.push({
       booking_id: bookingId,
       case_number: caseNumber || prepared.caseNumber || '',
