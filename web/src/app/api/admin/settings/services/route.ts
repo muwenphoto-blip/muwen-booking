@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       body.name,
       body.nameEn,
       body.optionsText,
+      body.basePrice,
     );
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

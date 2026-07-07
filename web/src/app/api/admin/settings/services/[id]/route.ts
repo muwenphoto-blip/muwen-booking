@@ -29,6 +29,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       name: body.name,
       nameEn: body.nameEn,
       optionsText: body.optionsText,
+      basePriceText: body.basePrice,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {

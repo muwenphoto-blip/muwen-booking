@@ -7,11 +7,91 @@ import type { BookingSlot } from '@/lib/booking/types';
 import { generateSlots } from '@/lib/booking/time';
 import { FormField } from '@/components/form-field';
 
-type ScheduleConfig = {
+export type ScheduleConfig = {
   openTime: string;
   closeTime: string;
   slotMinutes: number;
 };
+
+type ScheduleDateTimeFieldsProps = {
+  dateFieldId?: string;
+  timeFieldId?: string;
+  dateLabel: string;
+  timeLabel: string;
+  dateParts: DateParts;
+  time: string;
+  scheduleConfig?: ScheduleConfig;
+  optional?: boolean;
+  onChange: (next: { dateParts: DateParts; time: string }) => void;
+};
+
+export function ScheduleDateTimeFields({
+  dateFieldId,
+  timeFieldId,
+  dateLabel,
+  timeLabel,
+  dateParts,
+  time,
+  scheduleConfig,
+  optional = true,
+  onChange,
+}: ScheduleDateTimeFieldsProps) {
+  const isoDate = formatDatePartsToIso(dateParts);
+
+  const timeOptions = useMemo(() => {
+    if (!scheduleConfig) {
+      return time ? [time] : [];
+    }
+    const slots = generateSlots(
+      scheduleConfig.openTime || '10:00',
+      scheduleConfig.closeTime || '18:00',
+      scheduleConfig.slotMinutes || 30,
+    );
+    if (time && !slots.includes(time)) return [...slots, time].sort();
+    return slots;
+  }, [scheduleConfig, time]);
+
+  return (
+    <>
+      <FormField fieldId={dateFieldId || 'schedule-date'} label={dateLabel} optional={optional}>
+        <input
+          type="date"
+          value={isoDate}
+          onChange={(e) =>
+            onChange({
+              dateParts: parseDateParts(e.target.value),
+              time,
+            })
+          }
+        />
+      </FormField>
+      <FormField
+        fieldId={timeFieldId || 'schedule-time'}
+        label={timeLabel}
+        optional={optional}
+        hint={timeOptions.length ? undefined : '請先設定營業時間'}
+      >
+        <select
+          value={time}
+          disabled={!timeOptions.length}
+          onChange={(e) =>
+            onChange({
+              dateParts,
+              time: e.target.value,
+            })
+          }
+        >
+          <option value="">請選擇</option>
+          {timeOptions.map((slot) => (
+            <option key={slot} value={slot}>
+              {slot}
+            </option>
+          ))}
+        </select>
+      </FormField>
+    </>
+  );
+}
 
 type ShootingScheduleFieldsProps = {
   shootingDate: DateParts;

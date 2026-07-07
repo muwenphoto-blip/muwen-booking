@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { DateParts } from '@/lib/admin/booking-documents';
 import {
   serviceOptionsFor,
   serviceOptionPlaceholder,
@@ -17,50 +16,8 @@ import {
   patchDocumentState,
 } from '@/components/booking-document-shared';
 import { ItemRowList, PaymentRowList, QuoteLineList } from '@/components/booking-document-line-list';
-import { ShootingScheduleFields } from '@/components/booking-schedule-fields';
+import { ScheduleDateTimeFields } from '@/components/booking-schedule-fields';
 import { FormField } from '@/components/form-field';
-
-function DateFieldEdit({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: DateParts;
-  onChange: (next: DateParts) => void;
-}) {
-  return (
-    <label className="admin-field">
-      <span>{label}</span>
-      <div className="booking-doc-edit-date-row">
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="年"
-          value={value.year}
-          onChange={(e) => onChange({ ...value, year: e.target.value })}
-        />
-        <span>年</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="月"
-          value={value.month}
-          onChange={(e) => onChange({ ...value, month: e.target.value })}
-        />
-        <span>月</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="日"
-          value={value.day}
-          onChange={(e) => onChange({ ...value, day: e.target.value })}
-        />
-        <span>日</span>
-      </div>
-    </label>
-  );
-}
 
 function ServiceFields({
   state,
@@ -112,7 +69,7 @@ function ServiceFields({
           disabled={!state.service || options.length === 0}
           onChange={(e) => {
             onFieldTouch?.('doc-service-option');
-            onChange(syncServiceOptionChange(state, e.target.value));
+            onChange(syncServiceOptionChange(state, e.target.value, services));
           }}
           onBlur={() => onFieldBlur?.('doc-service-option')}
         >
@@ -270,10 +227,7 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
     handlerOptions,
     formMode,
     scheduleConfig,
-    bookingStaff,
   } = props;
-
-  const scheduleStaff = state.photographer || bookingStaff || '';
 
   function updateShootingSchedule(next: { shootingDate: typeof state.shootingDate; shootingTime: string }) {
     onChange({
@@ -484,31 +438,47 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
             />
           </label>
           {formMode === 'walk-in' ? null : (
-            <ShootingScheduleFields
-              shootingDate={state.shootingDate}
-              shootingTime={state.shootingTime}
-              staff={scheduleStaff}
-              minDate={scheduleConfig?.minDate}
-              maxDate={scheduleConfig?.maxDate}
+            <ScheduleDateTimeFields
+              dateLabel="拍攝日期"
+              timeLabel="拍攝時間"
+              dateParts={state.shootingDate}
+              time={state.shootingTime}
               scheduleConfig={scheduleConfig}
-              dateFieldId="doc-shooting-date"
-              timeFieldId="doc-shooting-time"
-              dateError={fieldErrors?.['doc-shooting-date']}
-              timeError={fieldErrors?.['doc-shooting-time']}
-              onDateTouch={() => onFieldTouch?.('doc-shooting-date')}
-              onTimeTouch={() => onFieldTouch?.('doc-shooting-time')}
-              onChange={updateShootingSchedule}
+              onChange={(next) =>
+                updateShootingSchedule({
+                  shootingDate: next.dateParts,
+                  shootingTime: next.time,
+                })
+              }
             />
           )}
-          <DateFieldEdit
-            label="看稿日期"
-            value={state.selectionDate}
-            onChange={(selectionDate) => onChange({ ...state, selectionDate })}
+          <ScheduleDateTimeFields
+            dateLabel="看稿日期"
+            timeLabel="看稿時間"
+            dateParts={state.selectionDate}
+            time={state.selectionTime}
+            scheduleConfig={scheduleConfig}
+            onChange={(next) =>
+              onChange({
+                ...state,
+                selectionDate: next.dateParts,
+                selectionTime: next.time,
+              })
+            }
           />
-          <DateFieldEdit
-            label="交付日期"
-            value={state.deliveryDate}
-            onChange={(deliveryDate) => onChange({ ...state, deliveryDate })}
+          <ScheduleDateTimeFields
+            dateLabel="交付日期"
+            timeLabel="交付時間"
+            dateParts={state.deliveryDate}
+            time={state.deliveryTime}
+            scheduleConfig={scheduleConfig}
+            onChange={(next) =>
+              onChange({
+                ...state,
+                deliveryDate: next.dateParts,
+                deliveryTime: next.time,
+              })
+            }
           />
         </div>
       </EditSection>
@@ -720,11 +690,10 @@ export function BookingDocumentItemsEdit(props: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentContractEdit(props: BookingDocumentSharedProps) {
-  const { state, onChange, scheduleConfig, bookingStaff } = props;
+  const { state, onChange, scheduleConfig } = props;
   const { grandTotal } = summarizeItemRows(state.itemRows);
   const documentTotal = getDocumentGrandTotal(state);
   const balanceDue = getBalanceDue(state);
-  const scheduleStaff = state.photographer || bookingStaff || '';
 
   function updateShootingSchedule(next: { shootingDate: typeof state.shootingDate; shootingTime: string }) {
     onChange({
@@ -805,24 +774,46 @@ export function BookingDocumentContractEdit(props: BookingDocumentSharedProps) {
 
       <EditSection title="時程安排">
         <div className="admin-grid-2">
-          <ShootingScheduleFields
-            shootingDate={state.shootingDate}
-            shootingTime={state.shootingTime}
-            staff={scheduleStaff}
+          <ScheduleDateTimeFields
+            dateLabel="拍攝日期"
+            timeLabel="拍攝時間"
+            dateParts={state.shootingDate}
+            time={state.shootingTime}
             scheduleConfig={scheduleConfig}
-            dateFieldId="doc-shooting-date"
-            timeFieldId="doc-shooting-time"
-            onChange={updateShootingSchedule}
+            onChange={(next) =>
+              updateShootingSchedule({
+                shootingDate: next.dateParts,
+                shootingTime: next.time,
+              })
+            }
           />
-          <DateFieldEdit
-            label="看稿日期"
-            value={state.selectionDate}
-            onChange={(selectionDate) => onChange({ ...state, selectionDate })}
+          <ScheduleDateTimeFields
+            dateLabel="看稿日期"
+            timeLabel="看稿時間"
+            dateParts={state.selectionDate}
+            time={state.selectionTime}
+            scheduleConfig={scheduleConfig}
+            onChange={(next) =>
+              onChange({
+                ...state,
+                selectionDate: next.dateParts,
+                selectionTime: next.time,
+              })
+            }
           />
-          <DateFieldEdit
-            label="交付日期"
-            value={state.deliveryDate}
-            onChange={(deliveryDate) => onChange({ ...state, deliveryDate })}
+          <ScheduleDateTimeFields
+            dateLabel="交付日期"
+            timeLabel="交付時間"
+            dateParts={state.deliveryDate}
+            time={state.deliveryTime}
+            scheduleConfig={scheduleConfig}
+            onChange={(next) =>
+              onChange({
+                ...state,
+                deliveryDate: next.dateParts,
+                deliveryTime: next.time,
+              })
+            }
           />
         </div>
       </EditSection>

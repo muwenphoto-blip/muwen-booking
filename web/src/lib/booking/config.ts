@@ -84,7 +84,13 @@ function buildStaffList(names: string[]): SelectOption[] {
 }
 
 function dedupeServices(
-  rows: { name: string; name_en: string; options_json: unknown; sort_order: number }[],
+  rows: {
+    name: string;
+    name_en: string;
+    options_json: unknown;
+    sort_order: number;
+    base_price?: number | null;
+  }[],
 ): ServiceItem[] {
   const seen = new Set<string>();
   const items: ServiceItem[] = [];
@@ -99,12 +105,19 @@ function dedupeServices(
             if (typeof opt === 'string') return { value: opt, label: opt };
             const label = String(opt?.label ?? '');
             const en = String(opt?.labelEn ?? '');
-            return { value: label, label: en ? `${label} ${en}` : label };
+            const price = Number(opt?.price);
+            return {
+              value: label,
+              label: en ? `${label} ${en}` : label,
+              ...(Number.isFinite(price) && price > 0 ? { price } : {}),
+            };
           })
         : [];
+      const basePrice = Number(row.base_price);
       items.push({
         name: row.name,
         label: row.name_en ? `${row.name} ${row.name_en}` : row.name,
+        ...(Number.isFinite(basePrice) && basePrice > 0 ? { basePrice } : {}),
         options: options.filter((opt) => opt.value),
       });
     });
@@ -121,14 +134,30 @@ export function clearBookingConfigCache() {
 async function loadBookingConfigFromDb(): Promise<BookingConfig> {
   const supabase = createSupabaseClient();
   const admin = createAdminSupabaseClient();
-  const [{ data: settings, error: settingsError }, { data: services, error: servicesError }, { data: staff, error: staffError }] =
+  const [{ data: settings, error: settingsError }, servicesResult, { data: staff, error: staffError }] =
     await Promise.all([
       supabase.from('settings').select('key, value'),
-      supabase.from('services').select('name, name_en, options_json, sort_order').eq('active', true),
+      supabase.from('services').select('name, name_en, options_json, sort_order, base_price').eq('active', true),
       admin.from('staff').select('name, case_prefix').eq('active', true).order('name'),
     ]);
 
   if (settingsError) throw new Error(settingsError.message);
+  let services: {
+    name: string;
+    name_en: string;
+    options_json: unknown;
+    sort_order: number;
+    base_price?: number | null;
+  }[] | null = servicesResult.data;
+  let servicesError = servicesResult.error;
+  if (servicesError?.message?.includes('base_price')) {
+    const fallback = await supabase
+      .from('services')
+      .select('name, name_en, options_json, sort_order')
+      .eq('active', true);
+    services = fallback.data;
+    servicesError = fallback.error;
+  }
   if (servicesError) throw new Error(servicesError.message);
   if (staffError) throw new Error(staffError.message);
 

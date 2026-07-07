@@ -18,7 +18,7 @@ type Props = {
   onClose: () => void;
   onNavigate: (index: number) => void;
   onToggleReject: (photoId: string) => void;
-  onSaveNote?: (photoId: string, note: string) => void;
+  onSaveNote?: (photoId: string, note: string) => Promise<void> | void;
 };
 
 export function DeliveryPhotoLightbox({
@@ -35,10 +35,12 @@ export function DeliveryPhotoLightbox({
   const hasPrev = index > 0;
   const hasNext = index < photos.length - 1;
   const [noteDraft, setNoteDraft] = useState('');
+  const [noteSaved, setNoteSaved] = useState(false);
   const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     setNoteDraft(String(photo?.selection_note || ''));
+    setNoteSaved(false);
   }, [photo?.id, photo?.selection_note]);
 
   const goPrev = useCallback(() => {
@@ -59,13 +61,24 @@ export function DeliveryPhotoLightbox({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      const typing =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement;
+
       if (event.key === 'Escape') onClose();
+      if (typing) return;
       if (event.key === 'ArrowLeft') goPrev();
       if (event.key === 'ArrowRight') goNext();
+      if (event.key === 'x' || event.key === 'X') {
+        event.preventDefault();
+        if (photo && !busy) onToggleReject(photo.id);
+      }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, goPrev, goNext]);
+  }, [onClose, goPrev, goNext, onToggleReject, photo, busy]);
 
   function onTouchStart(event: React.TouchEvent) {
     touchStartX.current = event.touches[0]?.clientX ?? null;
@@ -145,7 +158,7 @@ export function DeliveryPhotoLightbox({
               disabled={busy}
               onClick={() => onToggleReject(photo.id)}
             >
-              {rejected ? '改為保留' : '標記不要（✗）'}
+              {rejected ? '改為保留' : '✗ 標記不要'}
             </button>
           </div>
 
@@ -159,24 +172,35 @@ export function DeliveryPhotoLightbox({
                 maxLength={120}
                 placeholder="例如：放大眼睛、背景調亮"
                 disabled={busy}
-                onChange={(e) => setNoteDraft(e.target.value)}
+                onChange={(e) => {
+                  setNoteDraft(e.target.value);
+                  setNoteSaved(false);
+                }}
               />
               <div className="delivery-lightbox-note-actions">
                 <button
                   type="button"
                   className="delivery-button small"
                   disabled={busy || !noteChanged}
-                  onClick={() => onSaveNote(photo.id, noteDraft.trim())}
+                  onClick={async () => {
+                    await onSaveNote?.(photo.id, noteDraft.trim());
+                    setNoteSaved(true);
+                  }}
                 >
                   儲存備註
                 </button>
+                {noteSaved && !noteChanged ? (
+                  <p className="delivery-lightbox-saved" role="status">
+                    已儲存
+                  </p>
+                ) : null}
                 <p className="delivery-lightbox-hint">備註會加在成品下載檔名後面，方便溝通修圖需求</p>
               </div>
             </div>
           ) : null}
 
           <p className="delivery-lightbox-hint delivery-lightbox-hint--desktop">
-            左右鍵切換 · Esc 關閉
+            左右鍵切換 · X 標記不要 · Esc 關閉
           </p>
           <p className="delivery-lightbox-hint delivery-lightbox-hint--touch">
             左右滑動切換 · 點背景關閉

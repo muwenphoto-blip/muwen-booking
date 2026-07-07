@@ -263,7 +263,7 @@ function ItemRowEditor({
             onChange={(e) => {
               const next = updateItemRow(state, index, { packageChoice: e.target.value });
               if (index === 0) {
-                onChange(syncServiceOptionChange(next, e.target.value));
+                onChange(syncServiceOptionChange(next, e.target.value, services));
               } else {
                 onChange(next);
               }

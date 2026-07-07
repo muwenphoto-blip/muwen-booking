@@ -11,8 +11,17 @@ const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
 function serializeServiceOptions(options: AdminServiceRow['options']): string {
   return options
-    .map((opt) => (opt.labelEn ? `${opt.label}|${opt.labelEn}` : opt.label))
+    .map((opt) => {
+      if (opt.price && opt.labelEn) return `${opt.label}|${opt.labelEn}|${opt.price}`;
+      if (opt.price) return `${opt.label}|${opt.price}`;
+      if (opt.labelEn) return `${opt.label}|${opt.labelEn}`;
+      return opt.label;
+    })
     .join('\n');
+}
+
+function formatServicePrice(price: number | null): string {
+  return price && price > 0 ? String(price) : '';
 }
 
 export function AdminSettingsPanel() {
@@ -38,10 +47,12 @@ export function AdminSettingsPanel() {
 
   const [newServiceName, setNewServiceName] = useState('');
   const [newServiceNameEn, setNewServiceNameEn] = useState('');
+  const [newServiceBasePrice, setNewServiceBasePrice] = useState('');
   const [newServiceOptions, setNewServiceOptions] = useState('');
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editServiceName, setEditServiceName] = useState('');
   const [editServiceNameEn, setEditServiceNameEn] = useState('');
+  const [editServiceBasePrice, setEditServiceBasePrice] = useState('');
   const [editServiceOptions, setEditServiceOptions] = useState('');
   const [recoveryConfigured, setRecoveryConfigured] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
@@ -149,6 +160,7 @@ export function AdminSettingsPanel() {
         body: JSON.stringify({
           name: newServiceName,
           nameEn: newServiceNameEn,
+          basePrice: newServiceBasePrice,
           optionsText: newServiceOptions,
         }),
       });
@@ -157,6 +169,7 @@ export function AdminSettingsPanel() {
       setMessage(data.message || '已新增');
       setNewServiceName('');
       setNewServiceNameEn('');
+      setNewServiceBasePrice('');
       setNewServiceOptions('');
       await loadSettings();
     } catch (err) {
@@ -196,6 +209,7 @@ export function AdminSettingsPanel() {
         body: JSON.stringify({
           name: editServiceName,
           nameEn: editServiceNameEn,
+          basePrice: editServiceBasePrice,
           optionsText: editServiceOptions,
         }),
       });
@@ -450,10 +464,22 @@ export function AdminSettingsPanel() {
                         />
                       </label>
                       <label className="admin-field">
+                        <span>預設金額（新台幣）</span>
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={editServiceBasePrice}
+                          onChange={(e) => setEditServiceBasePrice(e.target.value)}
+                          placeholder="無子方案時使用"
+                        />
+                      </label>
+                      <label className="admin-field">
                         <span>方案選項（一行一個）</span>
                         <textarea
                           value={editServiceOptions}
                           onChange={(e) => setEditServiceOptions(e.target.value)}
+                          placeholder="例：半身|Half Body|1200"
                         />
                       </label>
                       <div className="admin-actions">
@@ -487,8 +513,13 @@ export function AdminSettingsPanel() {
                       </div>
                       {service.options.length ? (
                         <p className="admin-muted admin-service-options">
-                          方案：{service.options.map((opt) => opt.label).join('、')}
+                          方案：{service.options.map((opt) => {
+                            const price = opt.price ? `（$${opt.price}）` : '';
+                            return `${opt.label}${price}`;
+                          }).join('、')}
                         </p>
+                      ) : service.base_price ? (
+                        <p className="admin-muted">金額：${service.base_price}</p>
                       ) : (
                         <p className="admin-muted">無子方案</p>
                       )}
@@ -501,6 +532,7 @@ export function AdminSettingsPanel() {
                             setEditingServiceId(service.id);
                             setEditServiceName(service.name);
                             setEditServiceNameEn(service.name_en);
+                            setEditServiceBasePrice(formatServicePrice(service.base_price));
                             setEditServiceOptions(serializeServiceOptions(service.options));
                           }}
                         >
@@ -557,11 +589,22 @@ export function AdminSettingsPanel() {
                 </label>
               </div>
               <label className="admin-field">
+                <span>預設金額（新台幣，選填）</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={newServiceBasePrice}
+                  onChange={(e) => setNewServiceBasePrice(e.target.value)}
+                  placeholder="無子方案時使用，例：800"
+                />
+              </label>
+              <label className="admin-field">
                 <span>方案選項（選填，一行一個）</span>
                 <textarea
                   value={newServiceOptions}
                   onChange={(e) => setNewServiceOptions(e.target.value)}
-                  placeholder="例：半身|Half Body"
+                  placeholder="例：半身|Half Body|1200"
                 />
               </label>
               <button type="submit" className="admin-button" disabled={submitting}>

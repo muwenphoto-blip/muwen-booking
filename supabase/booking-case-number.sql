@@ -30,6 +30,8 @@ $$;
 create or replace function public.generate_booking_case_number(p_staff_name text)
 returns text
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   prefix text;
@@ -64,6 +66,8 @@ begin
   return prefix || lpad(next_num::text, 5, '0');
 end;
 $$;
+
+grant execute on function public.generate_booking_case_number(text) to anon, authenticated, service_role;
 
 create or replace function public.bookings_set_case_number()
 returns trigger

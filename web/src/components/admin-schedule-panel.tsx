@@ -64,14 +64,22 @@ function emptySlotMap(allSlots: string[]): Record<string, boolean> {
 function buildDayStateFromMonthDay(day: MonthDay, allSlots: string[]): DayState {
   const slots = emptySlotMap(allSlots);
   const offSlots = emptySlotMap(allSlots);
+  const defaultAllOpen =
+    day.shopOpen && day.usesDefault && !day.hasOverride && day.active && !day.dayOff;
+
   allSlots.forEach((time) => {
+    if (defaultAllOpen) {
+      slots[time] = true;
+      return;
+    }
     slots[time] = day.slots.includes(time);
     offSlots[time] = day.offSlots.includes(time);
   });
-  const hasWork = day.slots.length > 0;
+
+  const hasWork = defaultAllOpen || day.slots.length > 0;
   return {
-    active: day.dayOff ? false : hasWork,
-    expanded: day.dayOff || hasWork || day.offSlots.length > 0,
+    active: day.dayOff ? false : day.active && (hasWork || defaultAllOpen),
+    expanded: day.dayOff || hasWork || day.offSlots.length > 0 || defaultAllOpen,
     dayOff: Boolean(day.dayOff),
     offSlots,
     slots,
@@ -1009,6 +1017,12 @@ export function AdminSchedulePanel() {
           <p className="admin-success">本月營業日全部時段開放預約。</p>
         ) : null}
 
+        {!isPhotographer && !useAllSlots && panel.isAllSlots ? (
+          <p className="admin-muted admin-schedule-default-hint">
+            本月尚未個別設定排班，<strong>預設營業時段全部可接案</strong>。下方各日已依預設顯示可接時段；若要調整請修改後按「儲存並核定」。
+          </p>
+        ) : null}
+
         {!panel.allSlots.length ? (
           <p className="admin-error">請先在系統設定中設定營業時間</p>
         ) : (
@@ -1171,10 +1185,25 @@ export function AdminSchedulePanel() {
 
                   {day.shopOpen &&
                   !useAllSlots &&
-                  !state.active &&
+                  day.usesDefault &&
+                  !day.hasOverride &&
+                  day.active &&
                   !isDayOff &&
                   !isPartialOff &&
                   !slotOffMode ? (
+                    <div className="schedule-day-card__empty is-success">
+                      <span className="schedule-day-card__empty-icon">✓</span>
+                      <span>預設全部可接案（尚未個別設定）</span>
+                    </div>
+                  ) : null}
+
+                  {day.shopOpen &&
+                  !useAllSlots &&
+                  !state.active &&
+                  !isDayOff &&
+                  !isPartialOff &&
+                  !slotOffMode &&
+                  !(day.usesDefault && !day.hasOverride && day.active) ? (
                     <div className="schedule-day-card__empty">
                       <span>
                         {showDayOffOption

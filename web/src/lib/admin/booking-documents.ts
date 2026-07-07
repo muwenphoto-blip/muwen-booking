@@ -49,7 +49,9 @@ export type BookingDocumentState = {
   shootingDate: DateParts;
   shootingTime: string;
   selectionDate: DateParts;
+  selectionTime: string;
   deliveryDate: DateParts;
+  deliveryTime: string;
   shootingOutdoor: boolean;
   shootingIndoor: boolean;
   formalOutfits: string;
@@ -273,7 +275,9 @@ export function buildInitialDocumentState(input: {
     shootingDate: { ...appointmentDate },
     shootingTime: '',
     selectionDate: emptyDateParts(),
+    selectionTime: '',
     deliveryDate: emptyDateParts(),
+    deliveryTime: '',
     shootingOutdoor: false,
     shootingIndoor: true,
     formalOutfits: '',
@@ -307,6 +311,57 @@ export function serviceOptionPlaceholder(optionCount: number): string {
   return optionCount > 0 ? '請選擇' : '';
 }
 
+export function resolveServiceItemPrice(
+  services: ServiceItem[],
+  serviceName: string,
+  serviceOption: string,
+): string {
+  const item = services.find((s) => s.name === serviceName);
+  if (!item) return '';
+  if (serviceOption) {
+    const opt = item.options.find((o) => o.value === serviceOption);
+    if (opt?.price && opt.price > 0) return String(opt.price);
+  }
+  if (item.basePrice && item.basePrice > 0) return String(item.basePrice);
+  return '';
+}
+
+function applyCatalogPriceToDocument(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): BookingDocumentState {
+  const price = resolveServiceItemPrice(services, state.service, state.serviceOption);
+  if (!price) return state;
+
+  const itemRows = [...state.itemRows];
+  if (itemRows[0]) {
+    const quantity = itemRows[0].quantity?.trim() || '1';
+    const unit = Number(price) || 0;
+    const qtyNum = Number(quantity) || 1;
+    const discount = Number(String(itemRows[0].discount || '').replace(/,/g, '')) || 0;
+    const total = Math.max(0, unit * qtyNum - discount);
+    const itemTotal = total > 0 ? String(Math.round(total)) : '';
+    itemRows[0] = {
+      ...itemRows[0],
+      price,
+      quantity,
+      itemTotal,
+    };
+  }
+
+  const lineItems = [...state.lineItems];
+  if (lineItems[0] && itemRows[0]) {
+    lineItems[0] = {
+      ...lineItems[0],
+      unitPrice: price,
+      quantity: itemRows[0].quantity || '1',
+      amount: itemRows[0].itemTotal,
+    };
+  }
+
+  return { ...state, itemRows, lineItems };
+}
+
 export function syncServiceChange(
   state: BookingDocumentState,
   serviceName: string,
@@ -332,19 +387,23 @@ export function syncServiceChange(
     };
   }
 
-  return {
-    ...state,
-    service: serviceName,
-    serviceOption,
-    appointmentContent: label,
-    lineItems,
-    itemRows,
-  };
+  return applyCatalogPriceToDocument(
+    {
+      ...state,
+      service: serviceName,
+      serviceOption,
+      appointmentContent: label,
+      lineItems,
+      itemRows,
+    },
+    services,
+  );
 }
 
 export function syncServiceOptionChange(
   state: BookingDocumentState,
   serviceOption: string,
+  services: ServiceItem[],
 ): BookingDocumentState {
   const label = serviceOption
     ? `${state.service}｜${serviceOption}`
@@ -360,13 +419,16 @@ export function syncServiceOptionChange(
     itemRows[0] = { ...itemRows[0], packageChoice: serviceOption };
   }
 
-  return {
-    ...state,
-    serviceOption,
-    appointmentContent: label,
-    lineItems,
-    itemRows,
-  };
+  return applyCatalogPriceToDocument(
+    {
+      ...state,
+      serviceOption,
+      appointmentContent: label,
+      lineItems,
+      itemRows,
+    },
+    services,
+  );
 }
 
 export type DocumentTab = 'items' | 'contract' | 'quote';

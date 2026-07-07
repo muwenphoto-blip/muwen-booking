@@ -37,11 +37,11 @@ export function validateWalkInFormFields(params: {
   const doc = params.document;
 
   const rules: ValidationRule[] = [
-    { fieldId: 'walk-in-date', label: '拍攝日期', value: params.date, required: true },
+    { fieldId: 'walk-in-date', label: '預約日期', value: params.date, required: true },
     { fieldId: 'walk-in-staff', label: '服務人員', value: params.staff, required: true },
     { fieldId: 'walk-in-headcount', label: '人數', value: params.headcount, required: true },
     { fieldId: 'walk-in-gender', label: '性別', value: params.gender, required: true },
-    { fieldId: 'walk-in-slot', label: '拍攝時間', value: params.selectedTime, required: true },
+    { fieldId: 'walk-in-slot', label: '可預約時段', value: params.selectedTime, required: true },
     { fieldId: 'doc-service', label: '服務項目', value: doc.service, required: true },
     ...buildDocumentCustomerRules(doc),
   ];

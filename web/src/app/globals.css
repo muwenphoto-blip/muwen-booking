@@ -3263,6 +3263,7 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 20px;
+  align-items: start;
 }
 
 @media (min-width: 640px) {
@@ -3279,9 +3280,17 @@ body {
 
 .delivery-photo-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid var(--booking-border);
+  background: #fff;
+}
+
+.delivery-photo-thumb {
+  position: relative;
+  width: 100%;
 }
 
 .delivery-photo-open {
@@ -3299,14 +3308,9 @@ body {
 
 .delivery-photo-card .delivery-preview-frame {
   aspect-ratio: 3 / 4;
-}
-
-.delivery-photo-card img,
-.delivery-photo-card .delivery-preview-frame img {
-  display: block;
   width: 100%;
-  aspect-ratio: 3 / 4;
-  object-fit: cover;
+  min-height: 140px;
+  background: #f3f4f6;
 }
 
 .delivery-photo-card.rejected .delivery-preview-frame img {
@@ -3315,19 +3319,50 @@ body {
 }
 
 .delivery-reject-btn {
-  display: block;
-  width: 100%;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border: 0;
-  padding: 10px;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 1.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #374151;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
+}
+
+.delivery-reject-btn:hover {
+  background: #fff;
+}
+
+.delivery-reject-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .delivery-photo-card.rejected .delivery-reject-btn {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #dc2626;
+  color: #fff;
+}
+
+.delivery-photo-note-preview {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  color: #4b5563;
+  background: #f9fafb;
+  border-top: 1px solid var(--booking-border);
+  word-break: break-word;
 }
 
 .delivery-download-actions {
@@ -3575,6 +3610,13 @@ body {
   color: rgba(255, 255, 255, 0.65);
   font-size: 0.85rem;
   line-height: 1.4;
+}
+
+.delivery-lightbox-saved {
+  margin: 0;
+  color: #6ee7b7;
+  font-size: 0.875rem;
+  font-weight: 600;
 }
 
 .delivery-lightbox-hint--touch {

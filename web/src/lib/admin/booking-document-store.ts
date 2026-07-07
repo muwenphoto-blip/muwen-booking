@@ -88,7 +88,9 @@ function normalizeDocumentState(
   state.shootingDate = state.shootingDate || emptyDateParts();
   state.shootingTime = String(state.shootingTime || '');
   state.selectionDate = state.selectionDate || emptyDateParts();
+  state.selectionTime = String(state.selectionTime || '');
   state.deliveryDate = state.deliveryDate || emptyDateParts();
+  state.deliveryTime = String(state.deliveryTime || '');
   return migrateEmergencyContactFields(state);
 }
 

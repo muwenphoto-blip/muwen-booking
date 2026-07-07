@@ -317,8 +317,14 @@ export function BookingDocumentContractPrint({
           <tr>
             <th>看稿日期</th>
             <td><PaperDateField value={state.selectionDate} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, selectionDate: value }))} /></td>
+            <th>看稿時間</th>
+            <td><PaperField value={state.selectionTime} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, selectionTime: value }))} /></td>
+          </tr>
+          <tr>
             <th>交付日期</th>
             <td><PaperDateField value={state.deliveryDate} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, deliveryDate: value }))} /></td>
+            <th>交付時間</th>
+            <td><PaperField value={state.deliveryTime} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, deliveryTime: value }))} /></td>
           </tr>
           <tr>
             <th>拍攝服務</th>

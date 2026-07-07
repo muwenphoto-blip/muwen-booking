@@ -176,7 +176,9 @@ export async function assertStaffCasePrefixReady(
   }
 
   const prefix = normalizeCasePrefix(String(data.case_prefix || ''));
-  if (!validateCasePrefix(prefix)) {
+  try {
+    validateCasePrefix(prefix);
+  } catch {
     throw new Error(
       `攝影師「${name}」尚未設定案號前綴，請至團隊管理編輯該攝影師並儲存 2 碼英文前綴（例如 XE）`,
     );

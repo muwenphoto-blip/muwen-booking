@@ -366,7 +366,7 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
             </button>
           </div>
           <p className="delivery-muted">
-            預設全部保留。點照片可全螢幕放大；點 ✗ 標記不要的照片；可為每張加備註（會寫在下載檔名後面）。
+            預設全部保留。點照片可全螢幕放大；點右上角 ✗ 或按鍵盤 X 標記不要；可為每張加備註（會寫在下載檔名後面）。
           </p>
           {photos.length ? (
             <>
@@ -379,24 +379,30 @@ export function DeliveryGuestPanel({ slug }: { slug: string }) {
                       key={photo.id}
                       className={`delivery-photo-card${rejected ? ' rejected' : ''}`}
                     >
-                      <button
-                        type="button"
-                        className="delivery-photo-open"
-                        disabled={busy}
-                        onClick={() => setLightboxIndex(index)}
-                        aria-label={`放大檢視 ${photo.file_name}`}
-                      >
-                        <DeliveryImage src={photo.url} alt={photo.file_name} protect />
-                      </button>
-                      <button
-                        type="button"
-                        className="delivery-reject-btn"
-                        disabled={busy}
-                        onClick={() => togglePhoto(photo.id)}
-                        aria-label={rejected ? '改為保留' : '標記刪除'}
-                      >
-                        ✗
-                      </button>
+                      <div className="delivery-photo-thumb">
+                        <button
+                          type="button"
+                          className="delivery-photo-open"
+                          disabled={busy}
+                          onClick={() => setLightboxIndex(index)}
+                          aria-label={`放大檢視 ${photo.file_name}`}
+                        >
+                          <DeliveryImage src={photo.url} alt={photo.file_name} protect />
+                        </button>
+                        <button
+                          type="button"
+                          className="delivery-reject-btn"
+                          disabled={busy}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            togglePhoto(photo.id);
+                          }}
+                          aria-label={rejected ? '改為保留' : '標記不要'}
+                          title={rejected ? '改為保留' : '標記不要'}
+                        >
+                          {rejected ? '↩' : '✗'}
+                        </button>
+                      </div>
                       {note ? <p className="delivery-photo-note-preview">{note}</p> : null}
                     </article>
                   );

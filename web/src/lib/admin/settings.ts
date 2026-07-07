@@ -21,7 +21,8 @@ export type AdminServiceRow = {
   sort_order: number;
   name: string;
   name_en: string;
-  options: { label: string; labelEn: string }[];
+  base_price: number | null;
+  options: { label: string; labelEn: string; price?: number }[];
   active: boolean;
 };
 
@@ -95,7 +96,9 @@ function parseNonNegativeInt(raw: unknown, fallback: number): number {
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
-export function parseServiceOptionsText(raw: string): { label: string; labelEn: string }[] {
+export function parseServiceOptionsText(
+  raw: string,
+): { label: string; labelEn: string; price?: number }[] {
   const text = String(raw || '').trim();
   if (!text) return [];
 
@@ -104,14 +107,43 @@ export function parseServiceOptionsText(raw: string): { label: string; labelEn: 
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const pipe = line.indexOf('|');
-      if (pipe < 0) return { label: line, labelEn: '' };
-      return {
-        label: line.slice(0, pipe).trim(),
-        labelEn: line.slice(pipe + 1).trim(),
-      };
+      const parts = line.split('|').map((part) => part.trim());
+      if (parts.length >= 3) {
+        const price = parseInt(parts[2], 10);
+        return {
+          label: parts[0],
+          labelEn: parts[1],
+          ...(Number.isFinite(price) && price > 0 ? { price } : {}),
+        };
+      }
+      if (parts.length === 2) {
+        const maybePrice = parseInt(parts[1], 10);
+        if (String(maybePrice) === parts[1] && maybePrice > 0) {
+          return { label: parts[0], labelEn: '', price: maybePrice };
+        }
+        return { label: parts[0], labelEn: parts[1] };
+      }
+      return { label: line, labelEn: '' };
     })
     .filter((item) => item.label);
+}
+
+function serializeServiceOptionsForDb(
+  options: { label: string; labelEn: string; price?: number }[],
+): { label: string; labelEn: string; price?: number }[] {
+  return options.map((opt) => {
+    const row: { label: string; labelEn: string; price?: number } = {
+      label: opt.label,
+      labelEn: opt.labelEn || '',
+    };
+    if (opt.price && opt.price > 0) row.price = opt.price;
+    return row;
+  });
+}
+
+function parseBasePrice(raw: unknown): number | null {
+  const n = parseInt(String(raw ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 export function serializeGenderOptions(options: { value: string; en: string }[]): string {
@@ -132,16 +164,34 @@ async function writeSettingValue(key: string, value: string) {
 
 export async function loadAdminSettings(): Promise<AdminSettingsData> {
   const supabase = createAdminSupabaseClient();
-  const [{ data: settings, error: settingsError }, { data: services, error: servicesError }] =
-    await Promise.all([
-      supabase.from('settings').select('key, value'),
-      supabase
-        .from('services')
-        .select('id, sort_order, name, name_en, options_json, active')
-        .order('sort_order'),
-    ]);
+  const [{ data: settings, error: settingsError }, servicesResult] = await Promise.all([
+    supabase.from('settings').select('key, value'),
+    supabase
+      .from('services')
+      .select('id, sort_order, name, name_en, options_json, active, base_price')
+      .order('sort_order'),
+  ]);
 
   if (settingsError) throw new Error(settingsError.message);
+
+  let services: Array<{
+    id: string;
+    sort_order: number;
+    name: string;
+    name_en: string | null;
+    options_json: unknown;
+    active: boolean;
+    base_price?: number | null;
+  }> | null = servicesResult.data;
+  let servicesError = servicesResult.error;
+  if (servicesError?.message?.includes('base_price')) {
+    const fallback = await supabase
+      .from('services')
+      .select('id, sort_order, name, name_en, options_json, active')
+      .order('sort_order');
+    services = fallback.data;
+    servicesError = fallback.error;
+  }
   if (servicesError) throw new Error(servicesError.message);
 
   const map = Object.fromEntries((settings ?? []).map((row) => [row.key, row.value]));
@@ -164,11 +214,16 @@ export async function loadAdminSettings(): Promise<AdminSettingsData> {
       sort_order: row.sort_order,
       name: row.name,
       name_en: row.name_en || '',
+      base_price: parseBasePrice(row.base_price),
       options: Array.isArray(row.options_json)
-        ? row.options_json.map((opt) => ({
-            label: String(opt?.label ?? ''),
-            labelEn: String(opt?.labelEn ?? ''),
-          }))
+        ? row.options_json.map((opt) => {
+            const price = parseInt(String(opt?.price ?? ''), 10);
+            return {
+              label: String(opt?.label ?? ''),
+              labelEn: String(opt?.labelEn ?? ''),
+              ...(Number.isFinite(price) && price > 0 ? { price } : {}),
+            };
+          })
         : [],
       active: Boolean(row.active),
     })),
@@ -274,6 +329,7 @@ export async function addAdminService(
   name: string,
   nameEn: string,
   optionsText: string,
+  basePriceText = '',
 ) {
   name = String(name || '').trim();
   nameEn = String(nameEn || '').trim();
@@ -290,14 +346,22 @@ export async function addAdminService(
     .limit(1)
     .maybeSingle();
 
-  const options = parseServiceOptionsText(optionsText);
-  const { error } = await supabase.from('services').insert({
+  const options = serializeServiceOptionsForDb(parseServiceOptionsText(optionsText));
+  const basePrice = parseBasePrice(basePriceText);
+  const insertRow: Record<string, unknown> = {
     name,
     name_en: nameEn,
     options_json: options,
     sort_order: (maxRow?.sort_order ?? 0) + 1,
     active: true,
-  });
+  };
+  if (basePrice) insertRow.base_price = basePrice;
+
+  let { error } = await supabase.from('services').insert(insertRow);
+  if (error?.message?.includes('base_price')) {
+    delete insertRow.base_price;
+    ({ error } = await supabase.from('services').insert(insertRow));
+  }
   if (error) throw new Error(error.message);
 
   clearBookingConfigCache();
@@ -313,7 +377,7 @@ export async function addAdminService(
 export async function updateAdminService(
   session: { account: string; role: string },
   id: string,
-  payload: { name?: string; nameEn?: string; optionsText?: string },
+  payload: { name?: string; nameEn?: string; optionsText?: string; basePriceText?: string },
 ) {
   const supabase = createAdminSupabaseClient();
   const { data: row, error: fetchError } = await supabase
@@ -341,12 +405,20 @@ export async function updateAdminService(
     updates.name_en = String(payload.nameEn).trim();
   }
   if (payload.optionsText !== undefined) {
-    updates.options_json = parseServiceOptionsText(payload.optionsText);
+    updates.options_json = serializeServiceOptionsForDb(parseServiceOptionsText(payload.optionsText));
+  }
+  if (payload.basePriceText !== undefined) {
+    const basePrice = parseBasePrice(payload.basePriceText);
+    updates.base_price = basePrice;
   }
 
   if (!Object.keys(updates).length) throw new Error('沒有可更新的內容');
 
-  const { error } = await supabase.from('services').update(updates).eq('id', id);
+  let { error } = await supabase.from('services').update(updates).eq('id', id);
+  if (error?.message?.includes('base_price') && 'base_price' in updates) {
+    const { base_price: _removed, ...rest } = updates;
+    ({ error } = await supabase.from('services').update(rest).eq('id', id));
+  }
   if (error) throw new Error(error.message);
 
   clearBookingConfigCache();

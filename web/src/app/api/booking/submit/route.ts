@@ -97,6 +97,13 @@ export async function POST(request: NextRequest) {
     const admin = createAdminSupabaseClient();
     await assertStaffCasePrefixReady(admin, payload.staff);
 
+    const { data: caseNumber, error: caseNumberError } = await admin.rpc(
+      'generate_booking_case_number',
+      { p_staff_name: payload.staff },
+    );
+    if (caseNumberError) throw new Error(caseNumberError.message);
+    if (!caseNumber) throw new Error('無法產生案號，請確認攝影師已設定案號前綴');
+
     const supabase = createSupabaseClient();
     await assertBookingRateLimit(payload.email);
 
@@ -140,6 +147,7 @@ export async function POST(request: NextRequest) {
       email: payload.email,
       note: payload.note || '',
       status: '待確認',
+      case_number: caseNumber,
     });
 
     if (error) throw new Error(error.message);
