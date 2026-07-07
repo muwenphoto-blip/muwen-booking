@@ -37,6 +37,16 @@ function isPaymentFilled(row: DocumentPaymentRow): boolean {
   return Boolean(row.date || row.amount || row.customerSignature || row.receiver);
 }
 
+function toPaymentDateInputValue(value: string): string {
+  const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parts = text.split(/[/.-]/).map((part) => part.trim());
+  if (parts.length === 3 && parts[0].length === 4) {
+    return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+  }
+  return '';
+}
+
 function findFirstEmptyIndex<T>(rows: T[], isFilled: (row: T) => boolean): number {
   const index = rows.findIndex((row) => !isFilled(row));
   return index < 0 ? rows.length - 1 : index;
@@ -635,7 +645,8 @@ export function PaymentRowList({ state, onChange }: PaymentRowListProps) {
             <label className="admin-field">
               <span>付款日期</span>
               <input
-                value={state.payments[editingIndex].date}
+                type="date"
+                value={toPaymentDateInputValue(state.payments[editingIndex].date)}
                 onChange={(e) =>
                   onChange(updatePayment(state, editingIndex, { date: e.target.value }))
                 }
