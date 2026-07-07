@@ -68,10 +68,7 @@ export function BookingDocumentsModal({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || '無法載入文件');
         setState(
-          applyDocumentFinancialSync(
-            syncDocumentCatalogPricing(data.initial, data.services ?? [], data.promotions ?? []),
-            data.services ?? [],
-          ),
+          syncDocumentCatalogPricing(data.initial, data.services ?? [], data.promotions ?? []),
         );
         setServices(data.services ?? []);
         setPromotions(data.promotions ?? []);

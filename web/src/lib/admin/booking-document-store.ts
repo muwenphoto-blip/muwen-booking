@@ -8,7 +8,7 @@ import {
   stripTimeFromAppointmentContent,
   type DocumentPaymentRow,
 } from '@/lib/admin/booking-documents';
-import { applyDocumentPaymentTotals, inferPaymentKind } from '@/lib/admin/document-payment';
+import { inferPaymentKind, syncDepositIfPercentSet, syncPaymentAmountsForKinds } from '@/lib/admin/document-payment';
 import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
 import type { ServiceItem } from '@/lib/booking/types';
 
@@ -118,7 +118,11 @@ function normalizeDocumentState(
       };
     });
   }
-  return migrateEmergencyContactFields(applyDocumentPaymentTotals(state, services));
+  let next = migrateEmergencyContactFields(state);
+  if (next.depositPercent && next.depositPercent !== 'custom') {
+    next = syncDepositIfPercentSet(next, services);
+  }
+  return syncPaymentAmountsForKinds(next, services);
 }
 
 function cleanBookingNote(note: string | null | undefined): string {

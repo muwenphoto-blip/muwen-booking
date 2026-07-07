@@ -153,6 +153,16 @@ export function AdminFinancePanel() {
     setShowForm(true);
   }
 
+  function openCreateRefund() {
+    setEditingId(null);
+    setForm({
+      ...emptyForm(),
+      type: 'refund',
+      category: REFUND_CATEGORIES[0],
+    });
+    setShowForm(true);
+  }
+
   function openEdit(row: FinanceTransactionRow) {
     setEditingId(row.id);
     setForm({
@@ -293,6 +303,9 @@ export function AdminFinancePanel() {
             </button>
             <button type="button" className="admin-button secondary" onClick={() => exportReport('full')}>
               完整報表
+            </button>
+            <button type="button" className="admin-button secondary" onClick={openCreateRefund}>
+              登錄退款
             </button>
             <button type="button" className="admin-button" onClick={openCreate}>
               新增收支
