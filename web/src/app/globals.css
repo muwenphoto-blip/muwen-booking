@@ -3443,9 +3443,10 @@ body {
 
 .delivery-lightbox-panel {
   width: min(1100px, 100%);
-  max-height: 100%;
-  display: flex;
-  flex-direction: column;
+  height: min(100%, 100dvh);
+  max-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 12px;
   min-height: 0;
 }
@@ -3485,32 +3486,88 @@ body {
 .delivery-lightbox-stage {
   position: relative;
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
   gap: 8px;
   min-height: 0;
-  flex: 1;
+  overflow: hidden;
+}
+
+.delivery-lightbox-image-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delivery-lightbox-image {
-  max-height: calc(100vh - 180px);
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   border-radius: 8px;
   background: #111;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delivery-lightbox-image .delivery-preview-frame {
   width: 100%;
-  max-height: calc(100vh - 180px);
-  aspect-ratio: auto;
+  height: 100%;
+  max-height: 100%;
+  aspect-ratio: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delivery-lightbox-image .delivery-preview-frame img {
-  width: 100%;
-  max-height: calc(100vh - 180px);
+  width: auto;
   height: auto;
-  aspect-ratio: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: unset;
   object-fit: contain;
+}
+
+.delivery-lightbox-reject-fab {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.delivery-lightbox-reject-fab:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.delivery-lightbox-reject-fab:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.delivery-lightbox-reject-fab.active {
+  background: #dc2626;
+  border-color: #fecaca;
 }
 
 .delivery-lightbox-image.rejected .delivery-preview-frame img {
@@ -3539,15 +3596,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 12px;
-}
-
-.delivery-lightbox-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .delivery-lightbox-note {
@@ -3587,22 +3637,6 @@ body {
   color: var(--booking-muted);
   line-height: 1.35;
   word-break: break-word;
-}
-
-.delivery-lightbox-reject {
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font: inherit;
-  font-size: 16px;
-  cursor: pointer;
-  min-height: 44px;
-}
-
-.delivery-lightbox-reject.active {
-  background: #dc2626;
 }
 
 .delivery-lightbox-hint {
@@ -3680,7 +3714,7 @@ body {
   .delivery-lightbox-panel {
     width: 100%;
     height: 100%;
-    max-height: 100%;
+    max-height: 100dvh;
     padding:
       max(8px, env(safe-area-inset-top))
       max(8px, env(safe-area-inset-right))
@@ -3701,28 +3735,40 @@ body {
   .delivery-lightbox-stage {
     position: relative;
     display: block;
-    flex: 1;
     min-height: 0;
+    height: 100%;
+  }
+
+  .delivery-lightbox-image-wrap {
+    width: 100%;
+    height: 100%;
   }
 
   .delivery-lightbox-image {
     width: 100%;
     height: 100%;
     max-height: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
 
   .delivery-lightbox-image .delivery-preview-frame {
     width: 100%;
+    height: 100%;
     max-height: 100%;
   }
 
   .delivery-lightbox-image .delivery-preview-frame img {
-    width: 100%;
-    max-height: min(58vh, calc(100dvh - 280px));
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
     height: auto;
+  }
+
+  .delivery-lightbox-reject-fab {
+    left: 10px;
+    bottom: 10px;
+    width: 48px;
+    height: 48px;
+    font-size: 1.25rem;
   }
 
   .delivery-lightbox-nav {
@@ -3744,15 +3790,9 @@ body {
     right: 6px;
   }
 
-  .delivery-lightbox-reject {
-    width: 100%;
-  }
-
   .delivery-lightbox-foot {
     flex-shrink: 0;
-    max-height: 42vh;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    overflow: visible;
     padding-bottom: 4px;
   }
 

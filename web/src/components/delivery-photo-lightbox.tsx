@@ -135,8 +135,20 @@ export function DeliveryPhotoLightbox({
               ‹
             </button>
           ) : null}
-          <div className={`delivery-lightbox-image${rejected ? ' rejected' : ''}`}>
-            <DeliveryImage src={photo.url} alt={photo.file_name} protect />
+          <div className="delivery-lightbox-image-wrap">
+            <div className={`delivery-lightbox-image${rejected ? ' rejected' : ''}`}>
+              <DeliveryImage src={photo.url} alt={photo.file_name} protect />
+            </div>
+            <button
+              type="button"
+              className={`delivery-lightbox-reject-fab${rejected ? ' active' : ''}`}
+              disabled={busy}
+              onClick={() => onToggleReject(photo.id)}
+              aria-label={rejected ? '改為保留' : '標記不要'}
+              title={rejected ? '改為保留' : '標記不要'}
+            >
+              {rejected ? '↩' : '✗'}
+            </button>
           </div>
           {hasNext ? (
             <button
@@ -151,17 +163,6 @@ export function DeliveryPhotoLightbox({
         </div>
 
         <footer className="delivery-lightbox-foot">
-          <div className="delivery-lightbox-actions">
-            <button
-              type="button"
-              className={`delivery-lightbox-reject${rejected ? ' active' : ''}`}
-              disabled={busy}
-              onClick={() => onToggleReject(photo.id)}
-            >
-              {rejected ? '改為保留' : '✗ 標記不要'}
-            </button>
-          </div>
-
           {onSaveNote ? (
             <div className="delivery-lightbox-note">
               <label htmlFor="delivery-photo-note">修圖備註</label>
@@ -203,7 +204,7 @@ export function DeliveryPhotoLightbox({
             左右鍵切換 · X 標記不要 · Esc 關閉
           </p>
           <p className="delivery-lightbox-hint delivery-lightbox-hint--touch">
-            左右滑動切換 · 點背景關閉
+            左右滑動切換 · 點左下 ✗ 標記不要
           </p>
         </footer>
       </div>
