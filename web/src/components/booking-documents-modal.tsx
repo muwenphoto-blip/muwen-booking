@@ -6,7 +6,7 @@ import { applyDocumentFinancialSync } from '@/components/booking-document-shared
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import { clearFieldError } from '@/lib/form-validation';
-import { isDocumentFormComplete, validateDocumentFieldOnBlur } from '@/lib/admin/document-form-validation';
+import { isDocumentFormComplete, validateDocumentFieldOnBlur, validateDocumentFormFields } from '@/lib/admin/document-form-validation';
 import {
   buildTeamHandlerOptions,
   type TeamHandlerOption,
@@ -17,6 +17,7 @@ type BookingDocumentsModalProps = {
   caseNumber: string;
   open: boolean;
   onClose: () => void;
+  onSaved?: () => void;
 };
 
 export function BookingDocumentsModal({
@@ -24,6 +25,7 @@ export function BookingDocumentsModal({
   caseNumber,
   open,
   onClose,
+  onSaved,
 }: BookingDocumentsModalProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -118,6 +120,13 @@ export function BookingDocumentsModal({
   async function handleSave() {
     if (!state || !bookingId) return;
 
+    const errors = validateDocumentFormFields(state, services);
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setError(Object.values(errors)[0]);
+      return;
+    }
+
     setBusy('save');
     setError('');
     setSaveMessage('');
@@ -131,6 +140,7 @@ export function BookingDocumentsModal({
       if (!res.ok) throw new Error(data.error || '儲存失敗');
       setDirty(false);
       setSaveMessage(data.message || '已儲存');
+      onSaved?.();
       if (data.documentSetupHint !== undefined) {
         setSetupHint(data.documentSetupHint || '');
       }

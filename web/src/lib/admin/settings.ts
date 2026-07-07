@@ -1,4 +1,5 @@
 import { clearBookingConfigCache } from '@/lib/booking/config';
+import { translateChineseLabel } from '@/lib/admin/chinese-english-label';
 import { parseTime } from '@/lib/booking/time';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -94,6 +95,13 @@ function parsePositiveInt(raw: unknown, fallback: number): number {
 function parseNonNegativeInt(raw: unknown, fallback: number): number {
   const n = parseInt(String(raw ?? ''), 10);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function fillServiceOptionEnglish<T extends { label: string; labelEn: string }>(options: T[]): T[] {
+  return options.map((opt) => ({
+    ...opt,
+    labelEn: String(opt.labelEn || '').trim() || translateChineseLabel(opt.label) || '',
+  }));
 }
 
 export function parseServiceOptionsText(
@@ -354,7 +362,10 @@ export async function saveAdminSettingsForm(
   genderText: string,
 ) {
   const headcountOptions = parseHeadcountOptions(headcountText);
-  const genderOptions = parseGenderOptionsText(genderText);
+  const genderOptions = parseGenderOptionsText(genderText).map((item) => ({
+    ...item,
+    en: item.en || translateChineseLabel(item.value),
+  }));
   if (!headcountOptions.length) throw new Error('請至少填一個人數選項');
   if (!genderOptions.length) throw new Error('請至少填一個性別選項');
 
@@ -373,7 +384,7 @@ export async function addAdminService(
   basePriceText = '',
 ) {
   name = String(name || '').trim();
-  nameEn = String(nameEn || '').trim();
+  nameEn = String(nameEn || '').trim() || translateChineseLabel(name);
   if (name.length < 2) throw new Error('服務名稱至少 2 字');
 
   const supabase = createAdminSupabaseClient();
@@ -387,7 +398,9 @@ export async function addAdminService(
     .limit(1)
     .maybeSingle();
 
-  const options = serializeServiceOptionsForDb(parseServiceOptionsText(optionsText));
+  const options = fillServiceOptionEnglish(
+    serializeServiceOptionsForDb(parseServiceOptionsText(optionsText)),
+  );
   const basePrice = parseBasePrice(basePriceText);
   const insertRow: Record<string, unknown> = {
     name,
@@ -443,10 +456,14 @@ export async function updateAdminService(
     updates.name = name;
   }
   if (payload.nameEn !== undefined) {
-    updates.name_en = String(payload.nameEn).trim();
+    const nameForEn = String(payload.name ?? row.name).trim();
+    const rawEn = String(payload.nameEn).trim();
+    updates.name_en = rawEn || translateChineseLabel(nameForEn);
   }
   if (payload.optionsText !== undefined) {
-    updates.options_json = serializeServiceOptionsForDb(parseServiceOptionsText(payload.optionsText));
+    updates.options_json = fillServiceOptionEnglish(
+      serializeServiceOptionsForDb(parseServiceOptionsText(payload.optionsText)),
+    );
   }
   if (payload.basePriceText !== undefined) {
     const basePrice = parseBasePrice(payload.basePriceText);

@@ -77,11 +77,6 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
   const [draftIndex, setDraftIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (filledIndices.length === 0) {
-      setEditingIndex(0);
-      setDraftIndex(0);
-      return;
-    }
     setEditingIndex(null);
     setDraftIndex(null);
   }, [state.caseNumber]);
@@ -133,14 +128,16 @@ export function ItemRowList({ state, services, onChange }: ItemRowListProps) {
       itemTotal: '',
       quantity: '',
     }));
-    if (editingIndex === index) {
-      setEditingIndex(filledIndices.length > 1 ? null : 0);
-      setDraftIndex(filledIndices.length > 1 ? null : 0);
-    }
+    setEditingIndex(null);
+    setDraftIndex(null);
   }
+
+  const showEmpty = filledIndices.length === 0 && editingIndex === null;
 
   return (
     <div className="booking-doc-row-list">
+      {showEmpty ? <p className="booking-doc-row-list-empty admin-muted">無</p> : null}
+
       {filledIndices.map((index) => {
         if (editingIndex === index) return null;
         const row = state.itemRows[index];

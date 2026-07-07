@@ -3,7 +3,7 @@ import { serviceOptionsFor } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import { runValidation, validateFieldOnBlur, type ValidationRule } from '@/lib/form-validation';
 
-function hasFilledItemRow(rows: BookingDocumentState['itemRows']): boolean {
+export function hasFilledItemRow(rows: BookingDocumentState['itemRows']): boolean {
   return rows.some((row) =>
     Boolean(
       row.serviceContent ||
@@ -14,6 +14,20 @@ function hasFilledItemRow(rows: BookingDocumentState['itemRows']): boolean {
         row.quantity,
     ),
   );
+}
+
+export function buildItemRowsValidationError(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): string | null {
+  if (hasFilledItemRow(state.itemRows)) return null;
+
+  const options = serviceOptionsFor(state.service, services);
+  if (options.length > 0) {
+    return '請選擇至少一組方案';
+  }
+
+  return '請至少填寫一筆服務明細';
 }
 
 export function buildDocumentCustomerRules(state: BookingDocumentState): ValidationRule[] {
@@ -121,8 +135,9 @@ export function validateDocumentFormFields(
 ): Record<string, string> {
   const errors = validateDocumentCustomerFields(state, services);
 
-  if (!hasFilledItemRow(state.itemRows)) {
-    errors['doc-item-rows'] = '請至少填寫一筆服務明細';
+  const itemRowsError = buildItemRowsValidationError(state, services);
+  if (itemRowsError) {
+    errors['doc-item-rows'] = itemRowsError;
   }
 
   return errors;

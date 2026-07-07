@@ -716,6 +716,9 @@ export function AdminDashboardPanel() {
         caseNumber={documentsCaseNumber}
         open={Boolean(documentsBookingId)}
         onClose={closeDocuments}
+        onSaved={() => {
+          loadData({ silent: true }).catch(() => {});
+        }}
       />
 
       <WalkInBookingModal

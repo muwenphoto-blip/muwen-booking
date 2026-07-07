@@ -6,6 +6,7 @@ import { AdminShell } from '@/components/admin-shell';
 import { AdminServiceOptionsEditor } from '@/components/admin-service-options-editor';
 import type { AdminServiceRow, AdminSettingsData, ServiceOptionFormRow } from '@/lib/admin/settings';
 import { formRowsToOptionsText, serviceOptionsToFormRows } from '@/lib/admin/settings';
+import { autoFillGenderOptionsText, suggestEnglishUnlessTouched } from '@/lib/admin/chinese-english-label';
 
 type ConfigTab = 'shop' | 'booking' | 'form' | 'services' | 'security';
 
@@ -56,6 +57,8 @@ export function AdminSettingsPanel() {
   const [editServiceNameEn, setEditServiceNameEn] = useState('');
   const [editServiceBasePrice, setEditServiceBasePrice] = useState('');
   const [editServiceOptionRows, setEditServiceOptionRows] = useState<ServiceOptionFormRow[]>([]);
+  const [editServiceNameEnTouched, setEditServiceNameEnTouched] = useState(false);
+  const [newServiceNameEnTouched, setNewServiceNameEnTouched] = useState(false);
   const [recoveryConfigured, setRecoveryConfigured] = useState(false);
   const [recoveryKey, setRecoveryKey] = useState('');
   const [recoveryConfirm, setRecoveryConfirm] = useState('');
@@ -176,6 +179,7 @@ export function AdminSettingsPanel() {
       setMessage(data.message || '已新增');
       setNewServiceName('');
       setNewServiceNameEn('');
+      setNewServiceNameEnTouched(false);
       setNewServiceBasePrice('');
       setNewServiceOptionRows([]);
       await loadSettings();
@@ -438,7 +442,7 @@ export function AdminSettingsPanel() {
               <span>性別選項</span>
               <textarea
                 value={genderOptions}
-                onChange={(e) => setGenderOptions(e.target.value)}
+                onChange={(e) => setGenderOptions(autoFillGenderOptionsText(e.target.value))}
                 placeholder="一行一個，例：男|Male"
                 required
               />
@@ -464,7 +468,18 @@ export function AdminSettingsPanel() {
                         <span>服務名稱</span>
                         <input
                           value={editServiceName}
-                          onChange={(e) => setEditServiceName(e.target.value)}
+                          onFocus={() => {
+                            setEditServiceNameEn((prev) =>
+                              suggestEnglishUnlessTouched(editServiceName, prev, editServiceNameEnTouched),
+                            );
+                          }}
+                          onChange={(e) => {
+                            const nextName = e.target.value;
+                            setEditServiceName(nextName);
+                            setEditServiceNameEn((prev) =>
+                              suggestEnglishUnlessTouched(nextName, prev, editServiceNameEnTouched),
+                            );
+                          }}
                           required
                         />
                       </label>
@@ -472,7 +487,10 @@ export function AdminSettingsPanel() {
                         <span>英文名稱</span>
                         <input
                           value={editServiceNameEn}
-                          onChange={(e) => setEditServiceNameEn(e.target.value)}
+                          onChange={(e) => {
+                            setEditServiceNameEnTouched(true);
+                            setEditServiceNameEn(e.target.value);
+                          }}
                         />
                       </label>
                       <label className="admin-field">
@@ -544,6 +562,7 @@ export function AdminSettingsPanel() {
                             setEditingServiceId(service.id);
                             setEditServiceName(service.name);
                             setEditServiceNameEn(service.name_en);
+                            setEditServiceNameEnTouched(false);
                             setEditServiceBasePrice(
                               service.options.length ? '' : formatServicePrice(service.base_price),
                             );
@@ -588,7 +607,18 @@ export function AdminSettingsPanel() {
                   <span>服務名稱</span>
                   <input
                     value={newServiceName}
-                    onChange={(e) => setNewServiceName(e.target.value)}
+                    onFocus={() => {
+                      setNewServiceNameEn((prev) =>
+                        suggestEnglishUnlessTouched(newServiceName, prev, newServiceNameEnTouched),
+                      );
+                    }}
+                    onChange={(e) => {
+                      const nextName = e.target.value;
+                      setNewServiceName(nextName);
+                      setNewServiceNameEn((prev) =>
+                        suggestEnglishUnlessTouched(nextName, prev, newServiceNameEnTouched),
+                      );
+                    }}
                     placeholder="如：證件照"
                     required
                   />
@@ -597,7 +627,10 @@ export function AdminSettingsPanel() {
                   <span>英文名稱（選填）</span>
                   <input
                     value={newServiceNameEn}
-                    onChange={(e) => setNewServiceNameEn(e.target.value)}
+                    onChange={(e) => {
+                      setNewServiceNameEnTouched(true);
+                      setNewServiceNameEn(e.target.value);
+                    }}
                     placeholder="ID Photo"
                   />
                 </label>

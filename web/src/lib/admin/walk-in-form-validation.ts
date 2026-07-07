@@ -1,7 +1,10 @@
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import { serviceOptionsFor } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
-import { buildDocumentCustomerRules } from '@/lib/admin/document-form-validation';
+import {
+  buildDocumentCustomerRules,
+  buildItemRowsValidationError,
+} from '@/lib/admin/document-form-validation';
 import { runValidation, type ValidationRule } from '@/lib/form-validation';
 import { normalizeCasePrefix } from '@/lib/booking/case-number';
 
@@ -9,19 +12,6 @@ function staffHasCasePrefix(name: string, staffCasePrefixes?: Record<string, str
   if (!staffCasePrefixes) return true;
   const prefix = normalizeCasePrefix(staffCasePrefixes[name] || '');
   return /^[A-Z]{2}$/.test(prefix);
-}
-
-function hasFilledItemRow(rows: BookingDocumentState['itemRows']): boolean {
-  return rows.some((row) =>
-    Boolean(
-      row.serviceContent ||
-        row.packageChoice ||
-        row.price ||
-        row.discount ||
-        row.itemTotal ||
-        row.quantity,
-    ),
-  );
 }
 
 export function validateWalkInFormFields(params: {
@@ -63,9 +53,9 @@ export function validateWalkInFormFields(params: {
     errors['doc-email'] = '請填寫正確的電子信箱';
   }
 
-  const hasItem = hasFilledItemRow(doc.itemRows);
-  if (!hasItem) {
-    errors['doc-item-rows'] = '請至少填寫一筆服務明細';
+  const itemRowsError = buildItemRowsValidationError(doc, params.services);
+  if (itemRowsError) {
+    errors['doc-item-rows'] = itemRowsError;
   }
 
   return errors;

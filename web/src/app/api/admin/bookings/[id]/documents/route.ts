@@ -11,6 +11,7 @@ import {
   loadBookingDocumentRow,
 } from '@/lib/admin/booking-document-query';
 import {
+  formatBookingServiceFromDocument,
   loadBookingDocumentState,
   serializeBookingDocumentState,
 } from '@/lib/admin/booking-document-store';
@@ -119,6 +120,11 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     if (shootingDate && shootingTime) {
       bookingPatch.booking_date = shootingDate;
       bookingPatch.booking_time = shootingTime;
+    }
+
+    const service = formatBookingServiceFromDocument(document);
+    if (service) {
+      bookingPatch.service = service;
     }
 
     const { error } = await supabase.from('bookings').update(bookingPatch).eq('id', id);

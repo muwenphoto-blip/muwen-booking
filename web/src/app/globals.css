@@ -4589,6 +4589,14 @@ body {
   gap: 10px;
 }
 
+.booking-doc-row-list-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--booking-border);
+  border-radius: 12px;
+  text-align: center;
+}
+
 .booking-doc-row-card {
   display: flex;
   flex-wrap: wrap;
