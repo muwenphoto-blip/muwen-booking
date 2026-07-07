@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminAssetsSection } from '@/components/admin-assets-section';
 import { AdminShell } from '@/components/admin-shell';
@@ -16,6 +16,14 @@ import {
   type FinanceTransactionRow,
   type TransactionType,
 } from '@/lib/admin/finance';
+
+type FormMode = 'create' | 'refund' | 'edit';
+
+function formTitle(mode: FormMode): string {
+  if (mode === 'edit') return '編輯收支';
+  if (mode === 'refund') return '登錄退款';
+  return '新增收支';
+}
 
 type TransactionFormState = {
   transactionDate: string;
@@ -91,6 +99,8 @@ export function AdminFinancePanel() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [formMode, setFormMode] = useState<FormMode>('create');
+  const formRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<TransactionFormState>(emptyForm);
   const [typeFilter, setTypeFilter] = useState<'' | TransactionType>('');
@@ -231,9 +241,21 @@ export function AdminFinancePanel() {
     setDepreciationInput(amount > 0 ? String(amount) : '');
   }, [accountingReport]);
 
+  useEffect(() => {
+    if (!showForm || !formRef.current) return;
+    formRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [showForm, formMode]);
+
+  function closeForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setFormMode('create');
+  }
+
   function openCreate() {
     setEditingId(null);
     setForm(emptyForm());
+    setFormMode('create');
     setShowForm(true);
   }
 
@@ -244,6 +266,7 @@ export function AdminFinancePanel() {
       type: 'refund',
       category: REFUND_CATEGORIES[0],
     });
+    setFormMode('refund');
     setShowForm(true);
   }
 
@@ -259,6 +282,7 @@ export function AdminFinancePanel() {
       receiver: row.receiver,
       note: row.note,
     });
+    setFormMode('edit');
     setShowForm(true);
   }
 
@@ -287,8 +311,7 @@ export function AdminFinancePanel() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '儲存失敗');
       setMessage(data.message || '已儲存');
-      setShowForm(false);
-      setEditingId(null);
+      closeForm();
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : '儲存失敗');
@@ -376,16 +399,16 @@ export function AdminFinancePanel() {
           </div>
           {view === 'finance' ? (
           <div className="admin-finance-head-actions">
-            <button type="button" className="admin-button secondary" disabled={submitting} onClick={backfillFromBookings}>
+            <button type="button" className="admin-button secondary admin-finance-tool-btn" disabled={submitting} onClick={backfillFromBookings}>
               同步收款
             </button>
-            <button type="button" className="admin-button secondary" onClick={() => exportReport('pl')}>
+            <button type="button" className="admin-button secondary admin-finance-tool-btn" onClick={() => exportReport('pl')}>
               損益表
             </button>
-            <button type="button" className="admin-button secondary" onClick={() => exportReport('performance')}>
+            <button type="button" className="admin-button secondary admin-finance-tool-btn" onClick={() => exportReport('performance')}>
               績效統計
             </button>
-            <button type="button" className="admin-button secondary" onClick={() => exportReport('full')}>
+            <button type="button" className="admin-button secondary admin-finance-tool-btn" onClick={() => exportReport('full')}>
               完整報表
             </button>
             <button type="button" className="admin-button secondary" onClick={openCreateRefund}>
@@ -428,6 +451,132 @@ export function AdminFinancePanel() {
           <>
         {error ? <p className="admin-error">{error}</p> : null}
         {message ? <p className="admin-success">{message}</p> : null}
+
+        {showForm ? (
+          <div ref={formRef} className="admin-finance-form admin-finance-form--prominent">
+            <h4>{formTitle(formMode)}</h4>
+            <div className="admin-grid-2">
+              <label className="admin-field">
+                <span>日期</span>
+                <input
+                  type="date"
+                  value={form.transactionDate}
+                  onChange={(e) => setForm((prev) => ({ ...prev, transactionDate: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>類型</span>
+                <select
+                  value={form.type}
+                  onChange={(e) => {
+                    const type = e.target.value as TransactionType;
+                    setForm((prev) => ({
+                      ...prev,
+                      type,
+                      category: categoriesForType(type)[0],
+                    }));
+                  }}
+                >
+                  <option value="income">收入</option>
+                  <option value="expense">支出</option>
+                  <option value="refund">退款</option>
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>類別</span>
+                <select
+                  value={form.category}
+                  onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+                >
+                  {categoriesForType(form.type).map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>金額</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.amount}
+                  onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  required
+                />
+              </label>
+              <label className="admin-field">
+                <span>案件編號（選填）</span>
+                <select
+                  value={form.caseNumber}
+                  onChange={(e) => setForm((prev) => ({ ...prev, caseNumber: e.target.value }))}
+                >
+                  <option value="">不指定案件</option>
+                  {form.caseNumber &&
+                  !formOptions?.caseOptions.some((item) => item.caseNumber === form.caseNumber) ? (
+                    <option value={form.caseNumber}>{form.caseNumber}（目前值）</option>
+                  ) : null}
+                  {(formOptions?.caseOptions ?? []).map((item) => (
+                    <option key={`${item.bookingId}-${item.caseNumber}`} value={item.caseNumber}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>付款方式（選填）</span>
+                <select
+                  value={form.paymentMethod}
+                  onChange={(e) => setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                >
+                  <option value="">請選擇</option>
+                  {form.paymentMethod &&
+                  !formOptions?.paymentMethods.includes(form.paymentMethod) ? (
+                    <option value={form.paymentMethod}>{form.paymentMethod}（目前值）</option>
+                  ) : null}
+                  {(formOptions?.paymentMethods ?? []).map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>經手人（選填）</span>
+                <select
+                  value={form.receiver}
+                  onChange={(e) => setForm((prev) => ({ ...prev, receiver: e.target.value }))}
+                >
+                  <option value="">請選擇</option>
+                  {form.receiver && !formOptions?.receivers.includes(form.receiver) ? (
+                    <option value={form.receiver}>{form.receiver}（目前值）</option>
+                  ) : null}
+                  {(formOptions?.receivers ?? []).map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field admin-field--full">
+                <span>備註（選填）</span>
+                <input
+                  value={form.note}
+                  onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="admin-finance-form-actions">
+              <button type="button" className="admin-button" disabled={submitting} onClick={saveTransaction}>
+                儲存
+              </button>
+              <button type="button" className="admin-button secondary" disabled={submitting} onClick={closeForm}>
+                取消
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {summary &&
         accountingReport?.performance &&
@@ -803,140 +952,6 @@ export function AdminFinancePanel() {
               </select>
             </label>
           </div>
-
-          {showForm ? (
-            <div className="admin-finance-form">
-              <h4>{editingId ? '編輯收支' : '新增收支'}</h4>
-              <div className="admin-grid-2">
-                <label className="admin-field">
-                  <span>日期</span>
-                  <input
-                    type="date"
-                    value={form.transactionDate}
-                    onChange={(e) => setForm((prev) => ({ ...prev, transactionDate: e.target.value }))}
-                    required
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>類型</span>
-                  <select
-                    value={form.type}
-                    onChange={(e) => {
-                      const type = e.target.value as TransactionType;
-                      setForm((prev) => ({
-                        ...prev,
-                        type,
-                        category: categoriesForType(type)[0],
-                      }));
-                    }}
-                  >
-                    <option value="income">收入</option>
-                    <option value="expense">支出</option>
-                    <option value="refund">退款</option>
-                  </select>
-                </label>
-                <label className="admin-field">
-                  <span>類別</span>
-                  <select
-                    value={form.category}
-                    onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-                  >
-                    {categoriesForType(form.type).map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="admin-field">
-                  <span>金額</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={form.amount}
-                    onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                    required
-                  />
-                </label>
-                <label className="admin-field">
-                  <span>案件編號（選填）</span>
-                  <select
-                    value={form.caseNumber}
-                    onChange={(e) => setForm((prev) => ({ ...prev, caseNumber: e.target.value }))}
-                  >
-                    <option value="">不指定案件</option>
-                    {form.caseNumber &&
-                    !formOptions?.caseOptions.some((item) => item.caseNumber === form.caseNumber) ? (
-                      <option value={form.caseNumber}>{form.caseNumber}（目前值）</option>
-                    ) : null}
-                    {(formOptions?.caseOptions ?? []).map((item) => (
-                      <option key={`${item.bookingId}-${item.caseNumber}`} value={item.caseNumber}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="admin-field">
-                  <span>付款方式（選填）</span>
-                  <select
-                    value={form.paymentMethod}
-                    onChange={(e) => setForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
-                  >
-                    <option value="">請選擇</option>
-                    {form.paymentMethod &&
-                    !formOptions?.paymentMethods.includes(form.paymentMethod) ? (
-                      <option value={form.paymentMethod}>{form.paymentMethod}（目前值）</option>
-                    ) : null}
-                    {(formOptions?.paymentMethods ?? []).map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="admin-field">
-                  <span>經手人（選填）</span>
-                  <select
-                    value={form.receiver}
-                    onChange={(e) => setForm((prev) => ({ ...prev, receiver: e.target.value }))}
-                  >
-                    <option value="">請選擇</option>
-                    {form.receiver && !formOptions?.receivers.includes(form.receiver) ? (
-                      <option value={form.receiver}>{form.receiver}（目前值）</option>
-                    ) : null}
-                    {(formOptions?.receivers ?? []).map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="admin-field admin-field--full">
-                  <span>備註（選填）</span>
-                  <input
-                    value={form.note}
-                    onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
-                  />
-                </label>
-              </div>
-              <div className="admin-finance-form-actions">
-                <button type="button" className="admin-button" disabled={submitting} onClick={saveTransaction}>
-                  儲存
-                </button>
-                <button
-                  type="button"
-                  className="admin-button secondary"
-                  disabled={submitting}
-                  onClick={() => {
-                    setShowForm(false);
-                    setEditingId(null);
-                  }}
-                >
-                  取消
-                </button>
-              </div>
-            </div>
-          ) : null}
 
           <div className="admin-table-wrap admin-finance-tx-table">
             <table className="admin-table">

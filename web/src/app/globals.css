@@ -4876,6 +4876,18 @@ body {
   white-space: nowrap;
 }
 
+.admin-finance-tool-btn:not(:disabled):hover {
+  border-color: var(--booking-primary);
+  box-shadow: 0 0 0 1px var(--booking-primary);
+  color: var(--booking-primary);
+}
+
+.admin-finance-form--prominent {
+  margin-bottom: 20px;
+  border: 2px solid var(--booking-primary);
+  scroll-margin-top: 88px;
+}
+
 .admin-finance-performance .admin-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
