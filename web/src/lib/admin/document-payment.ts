@@ -107,13 +107,13 @@ export function applyDepositPercentChoice(
 ): BookingDocumentState {
   const total = getDocumentGrandTotal(state, services);
   if (!choice) {
-    return { ...state, depositPercent: '', deposit: '' };
+    return syncPaymentAmountsForKinds({ ...state, depositPercent: '', deposit: '' }, services);
   }
   if (choice === 'custom') {
     return { ...state, depositPercent: 'custom' };
   }
   const deposit = calcDepositFromPercent(total, choice);
-  return applyDocumentPaymentTotals(
+  return syncPaymentAmountsForKinds(
     {
       ...state,
       depositPercent: String(choice),
@@ -181,4 +181,36 @@ export function prepareDocumentPaymentsForSync(
 
 export function sumDocumentPaymentAmounts(state: BookingDocumentState): number {
   return (state.payments || []).reduce((sum, row) => sum + Math.max(0, parseAmount(row.amount)), 0);
+}
+
+type PaymentRowRef = { payment: DocumentPaymentRow; index: number };
+
+/** 決定要寫入財務的付款列，避免全額+訂金+尾款重複入帳 */
+export function selectPaymentsForFinanceSync(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): { rows: PaymentRowRef[]; errors: string[] } {
+  const documentTotal = Math.round(getDocumentGrandTotal(state, services));
+  const withAmount: PaymentRowRef[] = (state.payments || [])
+    .map((payment, index) => ({ payment, index }))
+    .filter(({ payment }) => parseAmount(payment.amount) > 0);
+
+  const fullRows = withAmount.filter(({ payment }) => payment.paymentKind === 'full');
+  if (fullRows.length) {
+    const syncErrors =
+      fullRows.length > 1 ? ['有多筆全額付款，僅同步第一筆至財務'] : [];
+    return { rows: [fullRows[0]], errors: syncErrors };
+  }
+
+  const rows = withAmount;
+  const total = rows.reduce((sum, { payment }) => sum + parseAmount(payment.amount), 0);
+  if (documentTotal > 0 && total > documentTotal) {
+    return {
+      rows: [],
+      errors: [
+        `收款合計 NT$ ${total.toLocaleString('zh-Hant-TW')} 超過應收 NT$ ${documentTotal.toLocaleString('zh-Hant-TW')}，請刪除多餘付款或改為正確類型（全額／訂金／尾款）`,
+      ],
+    };
+  }
+  return { rows, errors: [] };
 }

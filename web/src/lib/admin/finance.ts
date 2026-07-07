@@ -2,6 +2,7 @@ import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import {
   paymentCategoryForRow,
   prepareDocumentPaymentsForSync,
+  selectPaymentsForFinanceSync,
   sumDocumentPaymentAmounts,
 } from '@/lib/admin/document-payment';
 import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
@@ -559,6 +560,13 @@ export async function syncTransactionsFromDocument(
   const supabase = createAdminSupabaseClient();
   const errors: string[] = [];
   const prepared = prepareDocumentPaymentsForSync(document, services);
+  const { rows: paymentRows, errors: paymentErrors } = selectPaymentsForFinanceSync(
+    prepared,
+    services,
+  );
+  paymentErrors.forEach((message) => {
+    if (!errors.includes(message)) errors.push(message);
+  });
 
   const fallbackDate =
     prepared.shootingDate?.year && prepared.shootingDate?.month && prepared.shootingDate?.day
@@ -567,8 +575,7 @@ export async function syncTransactionsFromDocument(
 
   const rowsToInsert: Array<Record<string, unknown>> = [];
 
-  for (let index = 0; index < (prepared.payments || []).length; index += 1) {
-    const payment = prepared.payments[index];
+  for (const { payment, index } of paymentRows) {
     const amount = Math.round(parseAmount(payment.amount));
     if (amount <= 0) continue;
 

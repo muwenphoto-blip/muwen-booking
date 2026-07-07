@@ -21,7 +21,6 @@ import { FormField } from '@/components/form-field';
 import {
   DEPOSIT_PERCENT_OPTIONS,
   applyDepositPercentChoice,
-  applyDocumentPaymentTotals,
   calcDepositFromPercent,
   type DepositPercentChoice,
 } from '@/lib/admin/document-payment';
@@ -148,12 +147,7 @@ export function BookingDocumentFeeFooter(props: BookingDocumentSharedProps) {
         <input
           value={state.additionalAmount}
           onChange={(e) =>
-            onChange(
-              applyDocumentPaymentTotals(
-                patchDocumentState(state, { ...state, additionalAmount: e.target.value }),
-                services,
-              ),
-            )
+            onChange(patchDocumentState(state, { ...state, additionalAmount: e.target.value }, services))
           }
         />
       </label>
