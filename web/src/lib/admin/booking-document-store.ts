@@ -8,6 +8,8 @@ import {
   stripTimeFromAppointmentContent,
   type DocumentPaymentRow,
 } from '@/lib/admin/booking-documents';
+import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
+import { inferPaymentKind } from '@/lib/admin/document-payment';
 import type { ServiceItem } from '@/lib/booking/types';
 
 type BookingRowForDocument = {
@@ -97,10 +99,24 @@ function normalizeDocumentState(
     : [];
   state.depositPercent = String(state.depositPercent || '');
   if (state.payments) {
-    state.payments = state.payments.map((row) => ({
-      ...row,
-      paymentKind: (row.paymentKind || '') as DocumentPaymentRow['paymentKind'],
-    }));
+    const documentTotal = getDocumentGrandTotal(state, services);
+    const deposit = parseAmount(state.deposit);
+    state.payments = state.payments.map((row, index) => {
+      const amount = parseAmount(row.amount);
+      const paymentKind = inferPaymentKind(
+        { ...row, paymentKind: (row.paymentKind || '') as DocumentPaymentRow['paymentKind'] },
+        index,
+        documentTotal,
+        deposit,
+      );
+      return {
+        ...row,
+        paymentKind: paymentKind as DocumentPaymentRow['paymentKind'],
+        date: amount > 0 && !String(row.date || '').trim() && hasDateParts(state.shootingDate)
+          ? `${state.shootingDate.year}-${String(state.shootingDate.month).padStart(2, '0')}-${String(state.shootingDate.day).padStart(2, '0')}`
+          : row.date,
+      };
+    });
   }
   return migrateEmergencyContactFields(state);
 }

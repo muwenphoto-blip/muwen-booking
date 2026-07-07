@@ -45,9 +45,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     if (body.action === 'backfill') {
       const result = await backfillTransactionsFromBookings(session.account);
+      const hint =
+        result.transactionsSynced > 0
+          ? `已寫入 ${result.transactionsSynced} 筆收入`
+          : result.errors[0] || '預約單內尚無可同步的收款金額';
       return NextResponse.json({
         ok: true,
-        message: `已從 ${result.synced} 筆預約單同步收款紀錄`,
+        message: `已處理 ${result.bookingsProcessed} 筆預約單，${hint}`,
         ...result,
       });
     }

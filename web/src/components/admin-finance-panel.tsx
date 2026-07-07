@@ -260,6 +260,9 @@ export function AdminFinancePanel() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '同步失敗');
+      if (data.errors?.length && !data.transactionsSynced) {
+        throw new Error(data.errors[0]);
+      }
       setMessage(data.message || '同步完成');
       await loadData();
     } catch (err) {
@@ -328,6 +331,16 @@ export function AdminFinancePanel() {
           <>
         {error ? <p className="admin-error">{error}</p> : null}
         {message ? <p className="admin-success">{message}</p> : null}
+
+        {summary &&
+        accountingReport?.performance &&
+        summary.income <= 0 &&
+        accountingReport.performance.company.totalRevenue > 0 ? (
+          <p className="admin-error">
+            預約單應收合計 {formatCurrency(accountingReport.performance.company.totalRevenue)}，但收支帳本尚無收入紀錄。
+            請點上方「同步收款」，或至各預約單文件按儲存（需有付款金額）。
+          </p>
+        ) : null}
 
         {accountingReport ? (
           <div

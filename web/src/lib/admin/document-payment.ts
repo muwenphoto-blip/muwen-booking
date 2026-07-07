@@ -96,3 +96,51 @@ export function todayIsoDate(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
+
+function fallbackPaymentDate(state: BookingDocumentState): string {
+  const { year, month, day } = state.shootingDate || { year: '', month: '', day: '' };
+  if (year && month && day) {
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  return todayIsoDate();
+}
+
+export function inferPaymentKind(
+  row: DocumentPaymentRow,
+  index: number,
+  documentTotal: number,
+  deposit: number,
+): DocumentPaymentKind {
+  if (row.paymentKind) return row.paymentKind;
+  const amount = parseAmount(row.amount);
+  if (amount <= 0) return '';
+  if (documentTotal > 0 && amount === documentTotal) return 'full';
+  if (deposit > 0 && amount === deposit) return 'deposit';
+  if (documentTotal > 0 && deposit > 0 && amount === documentTotal - deposit) return 'balance';
+  if (index === 0) return deposit > 0 ? 'deposit' : 'full';
+  return 'balance';
+}
+
+/** 儲存／同步前補齊付款類型與日期，讓舊資料也能寫入 transactions */
+export function prepareDocumentPaymentsForSync(
+  state: BookingDocumentState,
+  services: ServiceItem[],
+): BookingDocumentState {
+  const { documentTotal, deposit } = documentTotals(state, services);
+  const defaultDate = fallbackPaymentDate(state);
+  const payments = (state.payments || []).map((row, index) => {
+    const amount = parseAmount(row.amount);
+    if (amount <= 0) return row;
+    const paymentKind = inferPaymentKind(row, index, documentTotal, deposit);
+    return {
+      ...row,
+      paymentKind,
+      date: String(row.date || '').trim() || defaultDate,
+    };
+  });
+  return { ...state, payments };
+}
+
+export function sumDocumentPaymentAmounts(state: BookingDocumentState): number {
+  return (state.payments || []).reduce((sum, row) => sum + Math.max(0, parseAmount(row.amount)), 0);
+}

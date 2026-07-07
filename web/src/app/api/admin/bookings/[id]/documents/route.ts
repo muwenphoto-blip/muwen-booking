@@ -20,6 +20,7 @@ import { applyDocumentFinancialSync } from '@/components/booking-document-shared
 import { loadAdminPromotions } from '@/lib/admin/promotions';
 import { loadActiveAssetOptions } from '@/lib/admin/assets';
 import { syncTransactionsFromDocument } from '@/lib/admin/finance';
+import { prepareDocumentPaymentsForSync } from '@/lib/admin/document-payment';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canViewAllBookings } from '@/lib/admin/session';
 import { loadBookingConfig } from '@/lib/booking/config';
@@ -124,17 +125,20 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     const config = await loadBookingConfig();
     const promotions = await loadAdminPromotions();
-    const document = applyDocumentFinancialSync(
-      syncDocumentCatalogPricing(
-        {
-          ...body.document,
-          caseNumber: booking.case_number || body.document.caseNumber || '',
-          usedAssetIds: Array.isArray(body.document.usedAssetIds)
-            ? body.document.usedAssetIds.map((id) => String(id || '').trim()).filter(Boolean)
-            : [],
-        },
+    const document = prepareDocumentPaymentsForSync(
+      applyDocumentFinancialSync(
+        syncDocumentCatalogPricing(
+          {
+            ...body.document,
+            caseNumber: booking.case_number || body.document.caseNumber || '',
+            usedAssetIds: Array.isArray(body.document.usedAssetIds)
+              ? body.document.usedAssetIds.map((id) => String(id || '').trim()).filter(Boolean)
+              : [],
+          },
+          config.services,
+          promotions,
+        ),
         config.services,
-        promotions,
       ),
       config.services,
     );

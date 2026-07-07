@@ -1,5 +1,9 @@
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
-import { paymentCategoryForRow } from '@/lib/admin/document-payment';
+import {
+  paymentCategoryForRow,
+  prepareDocumentPaymentsForSync,
+  sumDocumentPaymentAmounts,
+} from '@/lib/admin/document-payment';
 import { getDocumentGrandTotal, parseAmount } from '@/components/booking-document-shared';
 import type { ServiceItem } from '@/lib/booking/types';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -366,7 +370,9 @@ export async function loadFinanceTransactions(filters?: {
 
   const { data, error } = await query;
   if (error) {
-    if (error.message.includes('transactions')) return [];
+    if (error.message.includes('does not exist') && error.message.includes('transactions')) {
+      throw new Error('請至 Supabase 執行 supabase/transactions.sql');
+    }
     throw new Error(error.message);
   }
   return (data ?? []).map(mapTransactionRow);
@@ -550,108 +556,89 @@ export async function syncTransactionsFromDocument(
   services: ServiceItem[] = [],
 ): Promise<{ synced: number; errors: string[] }> {
   const supabase = createAdminSupabaseClient();
-  const activeRefs: string[] = [];
   const errors: string[] = [];
-  let synced = 0;
-
-  const pushIncome = async (input: {
-    sourceRef: string;
-    amount: number;
-    category: string;
-    transactionDate: string;
-    receiver: string;
-  }) => {
-    if (input.amount <= 0) return;
-    activeRefs.push(input.sourceRef);
-    const { error } = await supabase.from('transactions').upsert(
-      {
-        booking_id: bookingId,
-        case_number: caseNumber || document.caseNumber || '',
-        transaction_date: input.transactionDate,
-        type: 'income',
-        category: input.category,
-        amount: input.amount,
-        payment_method: '',
-        receiver: input.receiver,
-        note: '',
-        source: 'document_payment',
-        source_ref: input.sourceRef,
-        created_by: createdBy,
-      },
-      { onConflict: 'booking_id,source,source_ref' },
-    );
-    if (error) {
-      if (error.message.includes('transactions') && error.message.includes('does not exist')) {
-        errors.push('請至 Supabase 執行 supabase/transactions.sql');
-        return;
-      }
-      errors.push(error.message);
-      return;
-    }
-    synced += 1;
-  };
+  const prepared = prepareDocumentPaymentsForSync(document, services);
 
   const fallbackDate =
-    document.shootingDate?.year && document.shootingDate?.month && document.shootingDate?.day
-      ? `${document.shootingDate.year}-${String(document.shootingDate.month).padStart(2, '0')}-${String(document.shootingDate.day).padStart(2, '0')}`
+    prepared.shootingDate?.year && prepared.shootingDate?.month && prepared.shootingDate?.day
+      ? `${prepared.shootingDate.year}-${String(prepared.shootingDate.month).padStart(2, '0')}-${String(prepared.shootingDate.day).padStart(2, '0')}`
       : formatIsoDate(new Date());
 
-  for (let index = 0; index < (document.payments || []).length; index += 1) {
-    const payment = document.payments[index];
+  const rowsToInsert: Array<Record<string, unknown>> = [];
+
+  for (let index = 0; index < (prepared.payments || []).length; index += 1) {
+    const payment = prepared.payments[index];
     const amount = Math.round(parseAmount(payment.amount));
     if (amount <= 0) continue;
 
-    await pushIncome({
-      sourceRef: String(index),
-      amount,
+    rowsToInsert.push({
+      booking_id: bookingId,
+      case_number: caseNumber || prepared.caseNumber || '',
+      transaction_date: parseTransactionDate(payment.date || fallbackDate),
+      type: 'income',
       category: paymentCategoryForRow(payment, index),
-      transactionDate: parseTransactionDate(payment.date || fallbackDate),
+      amount,
+      payment_method: '',
       receiver: String(payment.receiver || '').trim(),
+      note: '',
+      source: 'document_payment',
+      source_ref: String(index),
+      created_by: createdBy,
     });
   }
 
-  const depositAmount = Math.round(parseAmount(document.deposit));
-  const hasDepositPayment = (document.payments || []).some(
+  const depositAmount = Math.round(parseAmount(prepared.deposit));
+  const hasDepositPayment = (prepared.payments || []).some(
     (row) => row.paymentKind === 'deposit' && parseAmount(row.amount) > 0,
   );
   if (depositAmount > 0 && !hasDepositPayment) {
-    await pushIncome({
-      sourceRef: 'deposit',
-      amount: depositAmount,
+    rowsToInsert.push({
+      booking_id: bookingId,
+      case_number: caseNumber || prepared.caseNumber || '',
+      transaction_date: fallbackDate,
+      type: 'income',
       category: '訂金',
-      transactionDate: fallbackDate,
-      receiver: String(document.handler || document.photographer || '').trim(),
+      amount: depositAmount,
+      payment_method: '',
+      receiver: String(prepared.handler || prepared.photographer || '').trim(),
+      note: '',
+      source: 'document_payment',
+      source_ref: 'deposit',
+      created_by: createdBy,
     });
   }
 
-  const documentTotal = Math.round(getDocumentGrandTotal(document, services));
-  const hasRecordedIncome = activeRefs.length > 0;
-  if (documentTotal > 0 && !hasRecordedIncome && depositAmount <= 0) {
+  const documentTotal = Math.round(getDocumentGrandTotal(prepared, services));
+  if (documentTotal > 0 && rowsToInsert.length === 0 && depositAmount <= 0) {
     errors.push('已填寫應收總額但尚無收款紀錄，請在付款紀錄新增訂金、全額或尾款');
+    return { synced: 0, errors };
   }
 
-  const { data: existing, error: listError } = await supabase
+  const { error: deleteError } = await supabase
     .from('transactions')
-    .select('id, source_ref')
+    .delete()
     .eq('booking_id', bookingId)
     .eq('source', 'document_payment');
-  if (listError) {
-    if (listError.message.includes('transactions')) {
-      if (!errors.length) errors.push('請至 Supabase 執行 supabase/transactions.sql');
-      return { synced, errors };
+  if (deleteError) {
+    if (deleteError.message.includes('does not exist') && deleteError.message.includes('transactions')) {
+      return { synced: 0, errors: ['請至 Supabase 執行 supabase/transactions.sql'] };
     }
-    throw new Error(listError.message);
+    return { synced: 0, errors: [deleteError.message] };
   }
 
-  const staleIds = (existing ?? [])
-    .filter((row) => !activeRefs.includes(String(row.source_ref || '')))
-    .map((row) => row.id);
-  if (staleIds.length) {
-    const { error } = await supabase.from('transactions').delete().in('id', staleIds);
-    if (error) errors.push(error.message);
+  if (!rowsToInsert.length) {
+    return { synced: 0, errors };
   }
 
-  return { synced, errors };
+  const { error: insertError } = await supabase.from('transactions').insert(rowsToInsert);
+  if (insertError) {
+    if (insertError.message.includes('does not exist') && insertError.message.includes('transactions')) {
+      return { synced: 0, errors: ['請至 Supabase 執行 supabase/transactions.sql'] };
+    }
+    return { synced: 0, errors: [insertError.message] };
+  }
+
+  return { synced: rowsToInsert.length, errors };
 }
 
 export async function backfillTransactionsFromBookings(createdBy: string) {
@@ -667,14 +654,30 @@ export async function backfillTransactionsFromBookings(createdBy: string) {
     throw new Error(error.message);
   }
 
-  let synced = 0;
+  let bookingsProcessed = 0;
+  let transactionsSynced = 0;
+  const errors: string[] = [];
+
   for (const row of data ?? []) {
     const document = row.document_data as BookingDocumentState | null;
     if (!document) continue;
-    await syncTransactionsFromDocument(row.id, row.case_number || '', document, createdBy, []);
-    synced += 1;
+    if (sumDocumentPaymentAmounts(document) <= 0 && parseAmount(document.deposit) <= 0) continue;
+
+    bookingsProcessed += 1;
+    const result = await syncTransactionsFromDocument(
+      row.id,
+      row.case_number || '',
+      document,
+      createdBy,
+      [],
+    );
+    transactionsSynced += result.synced;
+    result.errors.forEach((message) => {
+      if (!errors.includes(message)) errors.push(message);
+    });
   }
-  return { synced };
+
+  return { bookingsProcessed, transactionsSynced, errors };
 }
 
 export function formatCurrency(amount: number): string {
