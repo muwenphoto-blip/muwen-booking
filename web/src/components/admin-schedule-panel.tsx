@@ -159,7 +159,26 @@ function pickDefaultDate(monthDays: MonthDay[], monthKey: string): string {
   return monthDays.find((day) => day.shopOpen)?.date ?? monthDays[0]?.date ?? '';
 }
 
+function buildAllSlotsDateState(panel: PanelData): Record<string, DayState> {
+  const next: Record<string, DayState> = {};
+  panel.monthDays.forEach((day) => {
+    next[day.date] = day.shopOpen
+      ? {
+          active: true,
+          expanded: true,
+          dayOff: false,
+          offSlots: emptySlotMap(panel.allSlots),
+          slots: Object.fromEntries(panel.allSlots.map((time) => [time, true])),
+        }
+      : buildDayStateFromMonthDay(day, panel.allSlots);
+  });
+  return next;
+}
+
 function buildDateState(data: PanelData): Record<string, DayState> {
+  if (data.isAllSlots) {
+    return buildAllSlotsDateState(data);
+  }
   const next: Record<string, DayState> = {};
   data.monthDays.forEach((day) => {
     next[day.date] = buildDayStateFromMonthDay(day, data.allSlots);
@@ -882,7 +901,7 @@ export function AdminSchedulePanel() {
             disabled={!canEdit || submitting || exporting}
             onClick={() => {
               setUseAllSlots(true);
-              setDateStates(buildDateState({ ...panel, isAllSlots: true, usesCalendar: false }));
+              setDateStates(buildAllSlotsDateState(panel));
             }}
           >
             本月全部時段

@@ -228,6 +228,30 @@ export function resolveStaffDaySchedule(
     };
   }
 
+  const monthKey = dateStr.slice(0, 7);
+  const hasMonthOverrides = monthHasScheduleOverrides(schedule, monthKey);
+  const hasDateOffSlots = (schedule.offSlots[dateStr] || []).length > 0;
+
+  // 新月份尚無任何排班資料：營業日預設全部時段可預約
+  if (
+    !hasMonthOverrides &&
+    !schedule.dayOff[dateStr] &&
+    !hasDateOffSlots &&
+    !Object.prototype.hasOwnProperty.call(schedule.calendar, dateStr)
+  ) {
+    return {
+      date: dateStr,
+      label: formatShortDateLabel(dateStr),
+      shopOpen: true,
+      active: true,
+      dayOff: false,
+      offSlots: [],
+      slots: [...allSlots],
+      hasOverride: false,
+      usesDefault: true,
+    };
+  }
+
   if (schedule.dayOff[dateStr]) {
     return {
       date: dateStr,
@@ -336,10 +360,20 @@ export function buildMonthScheduleView(
 }
 
 export function monthUsesCalendarOverrides(schedule: StaffSchedule, monthKey: string): boolean {
+  return monthHasScheduleOverrides(schedule, monthKey);
+}
+
+/** 該月是否已有任何排班設定（日期覆寫、排休、時段排休） */
+export function monthHasScheduleOverrides(schedule: StaffSchedule, monthKey: string): boolean {
   const parsed = parseMonthKey(monthKey);
   if (!parsed) return false;
-  return listDatesInMonth(parsed.year, parsed.month).some((date) =>
-    Object.prototype.hasOwnProperty.call(schedule.calendar, date),
+  const monthDates = new Set(listDatesInMonth(parsed.year, parsed.month));
+  const inMonth = (date: string) => monthDates.has(date);
+
+  return (
+    Object.keys(schedule.calendar).some(inMonth) ||
+    Object.keys(schedule.dayOff).some(inMonth) ||
+    Object.keys(schedule.offSlots).some(inMonth)
   );
 }
 

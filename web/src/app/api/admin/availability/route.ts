@@ -21,7 +21,7 @@ import {
   copyCalendarWeek,
   formatStaffAvailabilityLabel,
   mergeMonthCalendar,
-  monthUsesCalendarOverrides,
+  monthHasScheduleOverrides,
   parseStaffSchedule,
   serializeStaffSchedule,
   weekdayLabels,
@@ -142,7 +142,7 @@ export async function GET(request: NextRequest) {
       allSlots,
       config.openDays,
     );
-    const usesCalendar = monthUsesCalendarOverrides(editSchedule, monthKey);
+    const usesCalendar = monthHasScheduleOverrides(editSchedule, monthKey);
 
     return NextResponse.json({
       staffName,
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
       monthDays,
       publishedMonthDays,
       usesCalendar,
-      isAllSlots: !usesCalendar && editSchedule.mode === 'all',
+      isAllSlots: !monthHasScheduleOverrides(editSchedule, monthKey),
       schedulePending,
       canApprove:
         canApproveStaffSchedule(session, staffName, masterStaffNames, coMasterStaffNames) &&
@@ -355,8 +355,8 @@ export async function PUT(request: NextRequest) {
       ok: true,
       message: `已核定「${staffName}」排班：${label}`,
       availabilityLabel: formatStaffAvailabilityLabel(nextSchedule, allSlots),
-      usesCalendar: monthUsesCalendarOverrides(nextSchedule, monthKey),
-      isAllSlots: !monthUsesCalendarOverrides(nextSchedule, monthKey) && nextSchedule.mode === 'all',
+      usesCalendar: monthHasScheduleOverrides(nextSchedule, monthKey),
+      isAllSlots: !monthHasScheduleOverrides(nextSchedule, monthKey),
       schedulePending: false,
     });
   } catch (err) {
