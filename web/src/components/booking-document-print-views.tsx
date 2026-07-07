@@ -163,8 +163,14 @@ export function BookingDocumentItemsPrint({
           <tr>
             <th>緊急聯絡人</th>
             <td>
-              <PaperField value={state.emergencyContact} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, emergencyContact: value }))} />
+              <PaperField value={state.emergencyContactName} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, emergencyContactName: value }))} />
             </td>
+            <th>緊急聯絡電話</th>
+            <td>
+              <PaperField value={state.emergencyContactPhone} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, emergencyContactPhone: value }))} />
+            </td>
+          </tr>
+          <tr>
             <th colSpan={2}>備註</th>
             <td colSpan={2}>
               <PaperField value={state.notes} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, notes: value }))} />
@@ -303,10 +309,10 @@ export function BookingDocumentContractPrint({
             <td colSpan={3}><PaperField value={state.remarks} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, remarks: value }))} /></td>
           </tr>
           <tr>
-            <th>預約日期</th>
-            <td><PaperDateField value={state.appointmentDate} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, appointmentDate: value }))} /></td>
             <th>拍攝日期</th>
-            <td><PaperDateField value={state.shootingDate} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, shootingDate: value }))} /></td>
+            <td><PaperDateField value={state.shootingDate} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, shootingDate: value, appointmentDate: value }))} /></td>
+            <th>拍攝時間</th>
+            <td><PaperField value={state.shootingTime} editable={editable} onChange={(value) => patch(base, (s) => ({ ...s, shootingTime: value }))} /></td>
           </tr>
           <tr>
             <th>看稿日期</th>

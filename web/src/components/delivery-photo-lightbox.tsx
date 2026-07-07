@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DeliveryImage } from '@/components/delivery-image';
 
 type PhotoItem = {
@@ -35,6 +35,7 @@ export function DeliveryPhotoLightbox({
   const hasPrev = index > 0;
   const hasNext = index < photos.length - 1;
   const [noteDraft, setNoteDraft] = useState('');
+  const touchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     setNoteDraft(String(photo?.selection_note || ''));
@@ -66,6 +67,21 @@ export function DeliveryPhotoLightbox({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose, goPrev, goNext]);
 
+  function onTouchStart(event: React.TouchEvent) {
+    touchStartX.current = event.touches[0]?.clientX ?? null;
+  }
+
+  function onTouchEnd(event: React.TouchEvent) {
+    if (touchStartX.current === null) return;
+    const endX = event.changedTouches[0]?.clientX;
+    if (endX == null) return;
+    const delta = endX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(delta) < 48) return;
+    if (delta > 0) goPrev();
+    else goNext();
+  }
+
   if (!photo) return null;
 
   const noteChanged = noteDraft.trim() !== String(photo.selection_note || '').trim();
@@ -91,7 +107,11 @@ export function DeliveryPhotoLightbox({
           </button>
         </header>
 
-        <div className="delivery-lightbox-stage">
+        <div
+          className="delivery-lightbox-stage"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+        >
           {hasPrev ? (
             <button
               type="button"
@@ -155,7 +175,12 @@ export function DeliveryPhotoLightbox({
             </div>
           ) : null}
 
-          <p className="delivery-lightbox-hint">左右鍵切換 · Esc 關閉</p>
+          <p className="delivery-lightbox-hint delivery-lightbox-hint--desktop">
+            左右鍵切換 · Esc 關閉
+          </p>
+          <p className="delivery-lightbox-hint delivery-lightbox-hint--touch">
+            左右滑動切換 · 點背景關閉
+          </p>
         </footer>
       </div>
     </div>

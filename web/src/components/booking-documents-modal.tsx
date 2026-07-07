@@ -39,6 +39,14 @@ export function BookingDocumentsModal({
   const [handlerOptions, setHandlerOptions] = useState<TeamHandlerOption[]>([]);
   const [dirty, setDirty] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const [scheduleConfig, setScheduleConfig] = useState<{
+    openTime: string;
+    closeTime: string;
+    slotMinutes: number;
+    minDate?: string;
+    maxDate?: string;
+  } | null>(null);
+  const [bookingStaffName, setBookingStaffName] = useState('');
 
   useEffect(() => {
     if (!open || !bookingId) return;
@@ -59,6 +67,8 @@ export function BookingDocumentsModal({
         setShopAddress(data.shopAddress || '');
         setShopPhone(data.shopPhone || '');
         setSetupHint(data.documentSetupHint || '');
+        setScheduleConfig(data.scheduleConfig ?? null);
+        setBookingStaffName(String(data.booking?.staffName || ''));
         setDirty(false);
       })
       .catch((err) => {
@@ -151,6 +161,8 @@ export function BookingDocumentsModal({
         onFieldTouch: touchField,
         onFieldBlur: blurField,
         handlerOptions,
+        scheduleConfig: scheduleConfig ?? undefined,
+        bookingStaff: bookingStaffName,
       }
     : null;
 

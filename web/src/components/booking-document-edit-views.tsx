@@ -17,6 +17,7 @@ import {
   patchDocumentState,
 } from '@/components/booking-document-shared';
 import { ItemRowList, PaymentRowList, QuoteLineList } from '@/components/booking-document-line-list';
+import { ShootingScheduleFields } from '@/components/booking-schedule-fields';
 import { FormField } from '@/components/form-field';
 
 function DateFieldEdit({
@@ -260,7 +261,28 @@ export function BookingDocumentFeeFooter(props: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
-  const { state, onChange, fieldErrors, onFieldTouch, onFieldBlur, handlerOptions } = props;
+  const {
+    state,
+    onChange,
+    fieldErrors,
+    onFieldTouch,
+    onFieldBlur,
+    handlerOptions,
+    formMode,
+    scheduleConfig,
+    bookingStaff,
+  } = props;
+
+  const scheduleStaff = state.photographer || bookingStaff || '';
+
+  function updateShootingSchedule(next: { shootingDate: typeof state.shootingDate; shootingTime: string }) {
+    onChange({
+      ...state,
+      shootingDate: next.shootingDate,
+      appointmentDate: { ...next.shootingDate },
+      shootingTime: next.shootingTime,
+    });
+  }
 
   return (
     <div className="booking-doc-edit-form">
@@ -268,7 +290,7 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
         <ServiceFields {...props} />
       </EditSection>
 
-      <EditSection title="客戶資料" hint="除客戶備註外皆為必填">
+      <EditSection title="客戶資料" hint="除客戶備註、Line ID 外皆為必填">
         <div className="admin-grid-2">
           <FormField
             fieldId="doc-customer-name"
@@ -322,8 +344,8 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
           <FormField
             fieldId="doc-line-id"
             label="Line ID"
-            required
-            hint="方便聯絡客戶"
+            optional
+            hint="選填，方便聯絡客戶"
             error={fieldErrors?.['doc-line-id']}
           >
             <input
@@ -353,19 +375,36 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
             />
           </FormField>
           <FormField
-            fieldId="doc-emergency"
-            label="緊急聯絡人"
-            required
-            hint="姓名與電話皆可填寫"
-            error={fieldErrors?.['doc-emergency']}
+            fieldId="doc-emergency-name"
+            label="緊急聯絡人姓名"
+            optional
+            hint="選填"
+            error={fieldErrors?.['doc-emergency-name']}
           >
             <input
-              value={state.emergencyContact}
+              value={state.emergencyContactName}
               onChange={(e) => {
-                onFieldTouch?.('doc-emergency');
-                onChange({ ...state, emergencyContact: e.target.value });
+                onFieldTouch?.('doc-emergency-name');
+                onChange({ ...state, emergencyContactName: e.target.value });
               }}
-              onBlur={() => onFieldBlur?.('doc-emergency')}
+              onBlur={() => onFieldBlur?.('doc-emergency-name')}
+            />
+          </FormField>
+          <FormField
+            fieldId="doc-emergency-phone"
+            label="緊急聯絡人電話"
+            optional
+            hint="選填"
+            error={fieldErrors?.['doc-emergency-phone']}
+          >
+            <input
+              type="tel"
+              value={state.emergencyContactPhone}
+              onChange={(e) => {
+                onFieldTouch?.('doc-emergency-phone');
+                onChange({ ...state, emergencyContactPhone: e.target.value });
+              }}
+              onBlur={() => onFieldBlur?.('doc-emergency-phone')}
             />
           </FormField>
           <FormField
@@ -444,16 +483,23 @@ export function BookingDocumentUnifiedEdit(props: BookingDocumentSharedProps) {
               onChange={(e) => onChange({ ...state, remarks: e.target.value })}
             />
           </label>
-          <DateFieldEdit
-            label="預約日期"
-            value={state.appointmentDate}
-            onChange={(appointmentDate) => onChange({ ...state, appointmentDate })}
-          />
-          <DateFieldEdit
-            label="拍攝日期"
-            value={state.shootingDate}
-            onChange={(shootingDate) => onChange({ ...state, shootingDate })}
-          />
+          {formMode === 'walk-in' ? null : (
+            <ShootingScheduleFields
+              shootingDate={state.shootingDate}
+              shootingTime={state.shootingTime}
+              staff={scheduleStaff}
+              minDate={scheduleConfig?.minDate}
+              maxDate={scheduleConfig?.maxDate}
+              scheduleConfig={scheduleConfig}
+              dateFieldId="doc-shooting-date"
+              timeFieldId="doc-shooting-time"
+              dateError={fieldErrors?.['doc-shooting-date']}
+              timeError={fieldErrors?.['doc-shooting-time']}
+              onDateTouch={() => onFieldTouch?.('doc-shooting-date')}
+              onTimeTouch={() => onFieldTouch?.('doc-shooting-time')}
+              onChange={updateShootingSchedule}
+            />
+          )}
           <DateFieldEdit
             label="看稿日期"
             value={state.selectionDate}
@@ -625,10 +671,18 @@ export function BookingDocumentItemsEdit(props: BookingDocumentSharedProps) {
             />
           </label>
           <label className="admin-field">
-            <span>緊急聯絡人</span>
+            <span>緊急聯絡人姓名</span>
             <input
-              value={state.emergencyContact}
-              onChange={(e) => onChange({ ...state, emergencyContact: e.target.value })}
+              value={state.emergencyContactName}
+              onChange={(e) => onChange({ ...state, emergencyContactName: e.target.value })}
+            />
+          </label>
+          <label className="admin-field">
+            <span>緊急聯絡人電話</span>
+            <input
+              type="tel"
+              value={state.emergencyContactPhone}
+              onChange={(e) => onChange({ ...state, emergencyContactPhone: e.target.value })}
             />
           </label>
           <label className="admin-field admin-field--full">
@@ -666,10 +720,20 @@ export function BookingDocumentItemsEdit(props: BookingDocumentSharedProps) {
 }
 
 export function BookingDocumentContractEdit(props: BookingDocumentSharedProps) {
-  const { state, onChange } = props;
+  const { state, onChange, scheduleConfig, bookingStaff } = props;
   const { grandTotal } = summarizeItemRows(state.itemRows);
   const documentTotal = getDocumentGrandTotal(state);
   const balanceDue = getBalanceDue(state);
+  const scheduleStaff = state.photographer || bookingStaff || '';
+
+  function updateShootingSchedule(next: { shootingDate: typeof state.shootingDate; shootingTime: string }) {
+    onChange({
+      ...state,
+      shootingDate: next.shootingDate,
+      appointmentDate: { ...next.shootingDate },
+      shootingTime: next.shootingTime,
+    });
+  }
 
   return (
     <div className="booking-doc-edit-form">
@@ -741,15 +805,14 @@ export function BookingDocumentContractEdit(props: BookingDocumentSharedProps) {
 
       <EditSection title="時程安排">
         <div className="admin-grid-2">
-          <DateFieldEdit
-            label="預約日期"
-            value={state.appointmentDate}
-            onChange={(appointmentDate) => onChange({ ...state, appointmentDate })}
-          />
-          <DateFieldEdit
-            label="拍攝日期"
-            value={state.shootingDate}
-            onChange={(shootingDate) => onChange({ ...state, shootingDate })}
+          <ShootingScheduleFields
+            shootingDate={state.shootingDate}
+            shootingTime={state.shootingTime}
+            staff={scheduleStaff}
+            scheduleConfig={scheduleConfig}
+            dateFieldId="doc-shooting-date"
+            timeFieldId="doc-shooting-time"
+            onChange={updateShootingSchedule}
           />
           <DateFieldEdit
             label="看稿日期"

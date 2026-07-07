@@ -2,8 +2,10 @@ import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import {
   buildInitialDocumentState,
   emptyDateParts,
+  migrateEmergencyContactFields,
   parseBookingService,
   parseDateParts,
+  stripTimeFromAppointmentContent,
 } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 
@@ -84,9 +86,22 @@ function normalizeDocumentState(
   }
   state.appointmentDate = state.appointmentDate || emptyDateParts();
   state.shootingDate = state.shootingDate || emptyDateParts();
+  state.shootingTime = String(state.shootingTime || '');
   state.selectionDate = state.selectionDate || emptyDateParts();
   state.deliveryDate = state.deliveryDate || emptyDateParts();
-  return state;
+  return migrateEmergencyContactFields(state);
+}
+
+function cleanBookingNote(note: string | null | undefined): string {
+  const text = String(note || '').trim();
+  if (!text) return '';
+  return text.replace(/^\[門市預約\]\s*/, '');
+}
+
+function preferStoredText(stored: string | undefined, fallback: string): string {
+  const value = String(stored ?? '').trim();
+  if (value) return value;
+  return String(fallback || '').trim();
 }
 
 function mergeBookingIntoDocument(
@@ -96,33 +111,38 @@ function mergeBookingIntoDocument(
   handlerName = '',
 ): BookingDocumentState {
   const parsed = parseBookingService(booking.service || state.service, services);
-  const appointmentDate = hasDateParts(state.appointmentDate)
-    ? state.appointmentDate
-    : parseDateParts(booking.booking_date);
+  const appointmentDate = hasDateParts(state.shootingDate)
+    ? state.shootingDate
+    : hasDateParts(state.appointmentDate)
+      ? state.appointmentDate
+      : parseDateParts(booking.booking_date);
   const staffName = booking.staff_name && booking.staff_name !== '不指定' ? booking.staff_name : '';
-  const appointmentContent =
+  const baseContent =
     state.appointmentContent ||
     (parsed.option ? `${parsed.service}｜${parsed.option}` : parsed.service);
-  const timeSuffix = booking.booking_time ? `｜${booking.booking_time}` : '';
+  const appointmentContent = stripTimeFromAppointmentContent(
+    baseContent,
+    state.shootingTime || booking.booking_time || '',
+  );
+  const shootingTime = String(state.shootingTime || booking.booking_time || '').trim();
 
   return {
     ...state,
     caseNumber: booking.case_number || state.caseNumber || '',
-    customerName: state.customerName || booking.customer_name || '',
-    phone: state.phone || formatBookingPhone(booking),
-    email: state.email || booking.email || '',
-    notes: state.notes || booking.note || '',
+    customerName: preferStoredText(state.customerName, booking.customer_name || ''),
+    phone: preferStoredText(state.phone, formatBookingPhone(booking)),
+    email: preferStoredText(state.email, booking.email || ''),
+    notes: preferStoredText(state.notes, cleanBookingNote(booking.note)),
+    address: preferStoredText(state.address, ''),
+    lineId: preferStoredText(state.lineId, ''),
     service: state.service || parsed.service,
     serviceOption: state.serviceOption || parsed.option,
-    photographer: state.photographer || staffName,
-    handler: state.handler || handlerName || staffName,
-    appointmentDate,
-    shootingDate: hasDateParts(state.shootingDate) ? state.shootingDate : { ...appointmentDate },
-    appointmentContent: appointmentContent
-      ? timeSuffix && !appointmentContent.includes(booking.booking_time || '｜')
-        ? `${appointmentContent}${timeSuffix}`
-        : appointmentContent
-      : booking.booking_time || '',
+    photographer: preferStoredText(state.photographer, staffName),
+    handler: preferStoredText(state.handler, handlerName || staffName),
+    appointmentDate: { ...appointmentDate },
+    shootingDate: { ...appointmentDate },
+    shootingTime,
+    appointmentContent,
   };
 }
 
@@ -136,7 +156,7 @@ export function loadBookingDocumentState(
     return mergeBookingIntoDocument(stored, booking, services, handlerName);
   }
 
-  return buildInitialDocumentState({
+  const initial = buildInitialDocumentState({
     caseNumber: booking.case_number || '',
     customerName: booking.customer_name || '',
     phone: formatBookingPhone(booking),
@@ -148,10 +168,19 @@ export function loadBookingDocumentState(
     services,
     handlerName,
   });
+
+  return mergeBookingIntoDocument(initial, booking, services, handlerName);
 }
 
 export function serializeBookingDocumentState(state: BookingDocumentState): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(state)) as Record<string, unknown>;
+  const synced = migrateEmergencyContactFields(state);
+  const payload = {
+    ...synced,
+    emergencyContact:
+      [synced.emergencyContactName, synced.emergencyContactPhone].filter(Boolean).join(' ') ||
+      synced.emergencyContact,
+  };
+  return JSON.parse(JSON.stringify(payload)) as Record<string, unknown>;
 }
 
 export function applyBookingSlotToDocument(
@@ -162,17 +191,19 @@ export function applyBookingSlotToDocument(
     staff: string;
   },
 ): BookingDocumentState {
-  const appointmentDate = parseDateParts(input.date);
-  const appointmentContent =
+  const shootingDate = parseDateParts(input.date);
+  const appointmentContent = stripTimeFromAppointmentContent(
     state.appointmentContent ||
-    (state.serviceOption ? `${state.service}｜${state.serviceOption}` : state.service);
+      (state.serviceOption ? `${state.service}｜${state.serviceOption}` : state.service),
+    state.shootingTime,
+  );
   return {
     ...state,
-    appointmentDate,
+    appointmentDate: { ...shootingDate },
+    shootingDate,
+    shootingTime: input.time,
     photographer: input.staff,
-    appointmentContent: appointmentContent
-      ? `${appointmentContent}｜${input.time}`
-      : input.time,
+    appointmentContent,
   };
 }
 

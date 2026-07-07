@@ -36,15 +36,18 @@ export type BookingDocumentState = {
   phone: string;
   email: string;
   emergencyContact: string;
-  notes: string;
+  emergencyContactName: string;
+  emergencyContactPhone: string;
   lineId: string;
   address: string;
+  notes: string;
   service: string;
   serviceOption: string;
   photographer: string;
   assistant: string;
   appointmentDate: DateParts;
   shootingDate: DateParts;
+  shootingTime: string;
   selectionDate: DateParts;
   deliveryDate: DateParts;
   shootingOutdoor: boolean;
@@ -88,6 +91,62 @@ export function parseDateParts(isoDate: string | null | undefined): DateParts {
   const match = String(isoDate).match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return emptyDateParts();
   return { year: match[1], month: match[2], day: match[3] };
+}
+
+export function formatDatePartsToIso(parts: DateParts): string {
+  const year = String(parts.year || '').trim();
+  const month = String(parts.month || '').trim();
+  const day = String(parts.day || '').trim();
+  if (!year || !month || !day) return '';
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+export function stripTimeFromAppointmentContent(content: string, time?: string): string {
+  let text = String(content || '').trim();
+  if (!text) return '';
+  if (time) {
+    const suffix = `｜${time}`;
+    if (text.endsWith(suffix)) return text.slice(0, -suffix.length).trim();
+  }
+  return text.replace(/｜\d{1,2}:\d{2}$/, '').trim();
+}
+
+export function migrateEmergencyContactFields(state: BookingDocumentState): BookingDocumentState {
+  const name = String(state.emergencyContactName || '').trim();
+  const phone = String(state.emergencyContactPhone || '').trim();
+  const legacy = String(state.emergencyContact || '').trim();
+
+  if (name || phone) {
+    return {
+      ...state,
+      emergencyContactName: name,
+      emergencyContactPhone: phone,
+      emergencyContact: legacy || [name, phone].filter(Boolean).join(' '),
+    };
+  }
+
+  if (!legacy) {
+    return { ...state, emergencyContactName: '', emergencyContactPhone: '', emergencyContact: '' };
+  }
+
+  const phoneMatch = legacy.match(/(\+?\d[\d\s-]{7,}\d)/);
+  if (phoneMatch) {
+    const parsedPhone = phoneMatch[1].trim();
+    const parsedName = legacy.replace(phoneMatch[0], '').replace(/[｜|,/]/g, ' ').trim();
+    return {
+      ...state,
+      emergencyContactName: parsedName,
+      emergencyContactPhone: parsedPhone,
+      emergencyContact: legacy,
+    };
+  }
+
+  return {
+    ...state,
+    emergencyContactName: legacy,
+    emergencyContactPhone: '',
+    emergencyContact: legacy,
+  };
 }
 
 export function parseBookingService(
@@ -201,6 +260,8 @@ export function buildInitialDocumentState(input: {
     phone: input.phone || '',
     email: input.email || '',
     emergencyContact: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
     notes: input.note || '',
     lineId: '',
     address: '',
@@ -210,6 +271,7 @@ export function buildInitialDocumentState(input: {
     assistant: '',
     appointmentDate,
     shootingDate: { ...appointmentDate },
+    shootingTime: '',
     selectionDate: emptyDateParts(),
     deliveryDate: emptyDateParts(),
     shootingOutdoor: false,

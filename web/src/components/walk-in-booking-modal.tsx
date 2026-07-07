@@ -19,7 +19,6 @@ import {
   findNextOpenDate,
   formatDate,
   formatDateWithWeekday,
-  generateSlots,
   getDayOfWeek,
 } from '@/lib/booking/time';
 
@@ -174,20 +173,6 @@ export function WalkInBookingModal({
 
   const availableSlots = useMemo(() => slots.filter((slot) => slot.available), [slots]);
 
-  const allSlotTimes = useMemo(() => {
-    if (!config) return [];
-    return generateSlots(
-      config.openTime || '10:00',
-      config.closeTime || '18:00',
-      config.slotMinutes || 30,
-    );
-  }, [config]);
-
-  const slotGridRows = useMemo(
-    () => Math.max(1, Math.ceil(allSlotTimes.length / 3)),
-    [allSlotTimes.length],
-  );
-
   const minDate = useMemo(() => formatDate(new Date()), []);
   const maxDate = useMemo(() => {
     if (!config) return '';
@@ -198,7 +183,7 @@ export function WalkInBookingModal({
     if (slotsLoading) return '';
     if (isShopClosed) return '此日為店休，請改選其他日期。';
     if (!availableSlots.length) return '此日期無可預約時段。';
-    return '點選時段後填寫下方登記資料。';
+    return '請從下拉選單選擇拍攝時間。';
   }, [slotsLoading, isShopClosed, availableSlots.length]);
 
   const formComplete = useMemo(() => {
@@ -321,6 +306,16 @@ export function WalkInBookingModal({
           onFieldBlur: blurField,
           formMode: 'walk-in' as const,
           handlerOptions,
+          scheduleConfig: config
+            ? {
+                openTime: config.openTime,
+                closeTime: config.closeTime,
+                slotMinutes: config.slotMinutes,
+                minDate,
+                maxDate,
+              }
+            : undefined,
+          bookingStaff: staff,
         }
       : null;
 
@@ -381,14 +376,14 @@ export function WalkInBookingModal({
 
             <section className="booking-walk-in-schedule-card">
               <div className="booking-walk-in-schedule-head">
-                <h4>① 預約時段</h4>
-                <p>先選日期與服務人員，再點選可預約時段；標示 <abbr className="admin-field-required" title="必填">*</abbr> 為必填</p>
+                <h4>① 拍攝日期與時間</h4>
+                <p>預約即為拍攝日；請選日期、服務人員與拍攝時間。標示 <abbr className="admin-field-required" title="必填">*</abbr> 為必填</p>
               </div>
               <div className="booking-walk-in-schedule-body">
             <div className="booking-walk-in-slot-bar">
               <FormField
                 fieldId="walk-in-date"
-                label="預約日期"
+                label="拍攝日期"
                 required
                 hint="僅可選今日起可預約的日期"
                 error={fieldErrors['walk-in-date']}
@@ -471,40 +466,26 @@ export function WalkInBookingModal({
 
             <FormField
               fieldId="walk-in-slot"
-              as="div"
-              className="booking-walk-in-slot-picker"
-              label="可預約時段"
+              label="拍攝時間"
               required
               hint={slotsHint}
               error={fieldErrors['walk-in-slot']}
             >
-              <div
-                className="booking-slots-wrap booking-walk-in-slots"
-                style={{ '--slot-rows': slotGridRows || 4 } as React.CSSProperties}
+              <select
+                value={selectedTime}
+                disabled={slotsLoading || !availableSlots.length}
+                onChange={(e) => {
+                  touchField('walk-in-slot');
+                  setSelectedTime(e.target.value);
+                }}
               >
-                <div className="booking-slots">
-                  {!slotsLoading
-                    ? availableSlots.map((slot) => (
-                        <button
-                          key={slot.time}
-                          type="button"
-                          className={['slot-btn', selectedTime === slot.time ? 'active' : ''].join(' ')}
-                          onClick={() => {
-                            touchField('walk-in-slot');
-                            setSelectedTime(slot.time);
-                          }}
-                        >
-                          {slot.time}
-                        </button>
-                      ))
-                    : null}
-                </div>
-                {slotsLoading ? (
-                  <p className="booking-slots-overlay admin-muted">載入時段中…</p>
-                ) : !availableSlots.length ? (
-                  <p className="booking-slots-overlay admin-muted">{slotsHint}</p>
-                ) : null}
-              </div>
+                <option value="">{slotsLoading ? '載入中…' : '請選擇'}</option>
+                {availableSlots.map((slot) => (
+                  <option key={slot.time} value={slot.time}>
+                    {slot.time}
+                  </option>
+                ))}
+              </select>
             </FormField>
               </div>
             </section>

@@ -20,6 +20,14 @@ export type BookingDocumentSharedProps = {
   onFieldBlur?: (fieldId: string) => void;
   formMode?: 'default' | 'walk-in';
   handlerOptions?: { value: string; label: string }[];
+  scheduleConfig?: {
+    openTime: string;
+    closeTime: string;
+    slotMinutes: number;
+    minDate?: string;
+    maxDate?: string;
+  };
+  bookingStaff?: string;
 };
 
 function toRocYear(gregorianYear: string): string {

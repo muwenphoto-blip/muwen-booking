@@ -4,6 +4,7 @@ import {
   SHOP_FULL_NAME,
   SHOP_PHONE,
   type BookingDocumentState,
+  formatDatePartsToIso,
 } from '@/lib/admin/booking-documents';
 import {
   DOCUMENT_DATA_SETUP_HINT,
@@ -17,6 +18,7 @@ import { applyDocumentFinancialSync } from '@/components/booking-document-shared
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canViewAllBookings } from '@/lib/admin/session';
 import { loadBookingConfig } from '@/lib/booking/config';
+import { addDays, formatDate } from '@/lib/booking/time';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 import { isMissingColumnError } from '@/lib/supabase/errors';
 
@@ -61,7 +63,15 @@ export async function GET(_request: Request, context: RouteContext) {
         id: booking.id,
         bookingDate: booking.booking_date,
         bookingTime: booking.booking_time,
+        staffName: booking.staff_name,
         status: booking.status,
+      },
+      scheduleConfig: {
+        openTime: config.openTime,
+        closeTime: config.closeTime,
+        slotMinutes: config.slotMinutes,
+        minDate: formatDate(new Date()),
+        maxDate: formatDate(addDays(new Date(), config.maxDaysAhead)),
       },
       initial,
     });
@@ -101,10 +111,17 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       caseNumber: booking.case_number || body.document.caseNumber || '',
     });
 
-    const { error } = await supabase
-      .from('bookings')
-      .update({ document_data: serializeBookingDocumentState(document) })
-      .eq('id', id);
+    const shootingDate = formatDatePartsToIso(document.shootingDate);
+    const shootingTime = String(document.shootingTime || '').trim();
+    const bookingPatch: Record<string, unknown> = {
+      document_data: serializeBookingDocumentState(document),
+    };
+    if (shootingDate && shootingTime) {
+      bookingPatch.booking_date = shootingDate;
+      bookingPatch.booking_time = shootingTime;
+    }
+
+    const { error } = await supabase.from('bookings').update(bookingPatch).eq('id', id);
     if (error) {
       if (isMissingColumnError(error.message, 'document_data')) {
         return NextResponse.json({ error: DOCUMENT_DATA_SETUP_HINT }, { status: 400 });

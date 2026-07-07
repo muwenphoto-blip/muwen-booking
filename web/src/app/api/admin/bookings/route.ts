@@ -18,8 +18,10 @@ import {
   type WalkInCreatePayload,
 } from '@/lib/admin/walk-in-booking';
 import {
+  applyBookingSlotToDocument,
   serializeBookingDocumentState,
 } from '@/lib/admin/booking-document-store';
+import { DOCUMENT_DATA_SETUP_HINT } from '@/lib/admin/booking-document-query';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { canCreateWalkInBooking, canViewAllBookings } from '@/lib/admin/session';
@@ -147,12 +149,18 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as WalkInCreatePayload;
     const config = await loadBookingConfig();
     const payload = validateWalkInCreatePayload(body, config);
-    const document = applyDocumentFinancialSync({
-      ...payload.document,
-      customerName: payload.name,
-      email: payload.email || '',
-      phone: `${payload.phoneCountry}${payload.phone}`,
-    });
+    const phoneDisplay = `${payload.phoneCountry}${payload.phone}`;
+    const document = applyDocumentFinancialSync(
+      applyBookingSlotToDocument(
+        {
+          ...payload.document,
+          customerName: payload.document.customerName || payload.name,
+          email: payload.document.email || payload.email || '',
+          phone: payload.document.phone || phoneDisplay,
+        },
+        { date: payload.date, time: payload.time, staff: payload.staff },
+      ),
+    );
 
     if (!manager && session.role !== '現場' && payload.staff !== (session.photographerName || session.account)) {
       throw new Error('僅能為自己建立門市預約');
@@ -168,7 +176,6 @@ export async function POST(request: NextRequest) {
 
     await assertWalkInSlotAvailable(payload, config, staffRows ?? [], counts ?? []);
 
-    const phoneDisplay = `${payload.phoneCountry}${payload.phone}`;
     const insertPayload = {
       booking_date: payload.date,
       booking_time: payload.time,
@@ -192,14 +199,7 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error && isMissingColumnError(error.message, 'document_data')) {
-      const { document_data: _removed, ...withoutDocument } = insertPayload;
-      const retry = await supabase
-        .from('bookings')
-        .insert(withoutDocument)
-        .select('id, case_number, booking_date, booking_time, staff_name, service, customer_name, status')
-        .single();
-      inserted = retry.data;
-      error = retry.error;
+      throw new Error(DOCUMENT_DATA_SETUP_HINT);
     }
 
     if (error) throw new Error(error.message);
@@ -213,7 +213,10 @@ export async function POST(request: NextRequest) {
       .from('bookings')
       .update({ document_data: serializeBookingDocumentState(savedDocument) })
       .eq('id', inserted.id);
-    if (docUpdate.error && !isMissingColumnError(docUpdate.error.message, 'document_data')) {
+    if (docUpdate.error) {
+      if (isMissingColumnError(docUpdate.error.message, 'document_data')) {
+        throw new Error(DOCUMENT_DATA_SETUP_HINT);
+      }
       throw new Error(docUpdate.error.message);
     }
 

@@ -7,6 +7,7 @@ import { getPhoneCountryRule } from '@/lib/booking/phone-countries';
 import type { BookingPayload } from '@/lib/booking/types';
 import { sendPendingBookingEmails } from '@/lib/mail/booking-emails';
 import { getStaffNotifyEmailByName } from '@/lib/mail/staff-notify';
+import { assertStaffCasePrefixReady } from '@/lib/admin/walk-in-booking';
 import { createSupabaseClient } from '@/lib/supabase/client';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
 
@@ -53,6 +54,9 @@ function validatePayload(payload: BookingPayload, config: Awaited<ReturnType<typ
 
   const staffNames = config.staff.map((item) => item.value);
   payload.staff = resolveStaff(payload.staff, staffNames);
+  if (payload.staff === '不指定') {
+    throw new Error('請選擇服務人員');
+  }
 
   const serviceName = String(payload.service || '').trim();
   const service = config.services.find((item) => item.name === serviceName.split('／')[0]);
@@ -89,6 +93,9 @@ export async function POST(request: NextRequest) {
     const payload = (await request.json()) as BookingPayload;
     const config = await loadBookingConfig();
     validatePayload(payload, config);
+
+    const admin = createAdminSupabaseClient();
+    await assertStaffCasePrefixReady(admin, payload.staff);
 
     const supabase = createSupabaseClient();
     await assertBookingRateLimit(payload.email);

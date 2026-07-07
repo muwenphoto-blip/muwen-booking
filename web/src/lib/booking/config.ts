@@ -1,4 +1,6 @@
 import { createSupabaseClient } from '@/lib/supabase/client';
+import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { normalizeCasePrefix } from './case-number';
 import type { BookingConfig, GenderOption, ServiceItem, SelectOption } from './types';
 
 function parseOpenDays(raw: string): number[] {
@@ -65,6 +67,10 @@ function formatHeadcountLabel(n: string): string {
   return `${n} 人 ${n} person${n === '1' ? '' : 's'}`;
 }
 
+function staffHasCasePrefix(raw: string): boolean {
+  return /^[A-Z]{2}$/.test(normalizeCasePrefix(raw));
+}
+
 function buildStaffList(names: string[]): SelectOption[] {
   if (names.length >= 2) {
     return [{ value: '不指定', label: formatStaffLabel('不指定') }].concat(
@@ -114,16 +120,21 @@ export function clearBookingConfigCache() {
 
 async function loadBookingConfigFromDb(): Promise<BookingConfig> {
   const supabase = createSupabaseClient();
+  const admin = createAdminSupabaseClient();
   const [{ data: settings, error: settingsError }, { data: services, error: servicesError }, { data: staff, error: staffError }] =
     await Promise.all([
       supabase.from('settings').select('key, value'),
       supabase.from('services').select('name, name_en, options_json, sort_order').eq('active', true),
-      supabase.from('staff_public').select('name').order('name'),
+      admin.from('staff').select('name, case_prefix').eq('active', true).order('name'),
     ]);
 
   if (settingsError) throw new Error(settingsError.message);
   if (servicesError) throw new Error(servicesError.message);
   if (staffError) throw new Error(staffError.message);
+
+  const bookableStaff = (staff ?? [])
+    .filter((row) => staffHasCasePrefix(String(row.case_prefix || '')))
+    .map((row) => row.name);
 
   const map = Object.fromEntries((settings ?? []).map((row) => [row.key, row.value]));
   const headcountOptions = parseHeadcountOptions(map.headcountOptions);
@@ -132,7 +143,7 @@ async function loadBookingConfigFromDb(): Promise<BookingConfig> {
   return {
     shopName: String(map.shopName || '沐紋映像').trim() || '沐紋映像',
     shopEmail: String(map.shopEmail || 'muwenphoto@gmail.com').trim() || 'muwenphoto@gmail.com',
-    staff: buildStaffList((staff ?? []).map((row) => row.name)),
+    staff: buildStaffList(bookableStaff),
     services: dedupeServices(services ?? []),
     headcountOptions: headcountOptions.map((n) => ({
       value: n,
