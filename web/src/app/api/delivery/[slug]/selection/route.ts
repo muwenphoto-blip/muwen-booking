@@ -4,6 +4,7 @@ import { isSelectionOpen } from '@/lib/delivery/access';
 import { validateSelectionNote } from '@/lib/delivery/selection-export';
 import { getDeliveryGuestSession, loadDeliveryBySlug } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { isMissingColumnError } from '@/lib/supabase/errors';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 
@@ -47,7 +48,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
         .from('delivery_photos')
         .update({ selection_note: note })
         .eq('id', photoId);
-      if (updateError) throw new Error(updateError.message);
+      if (updateError) {
+        if (isMissingColumnError(updateError.message, 'selection_note')) {
+          throw new Error('選片備註功能尚未啟用，請至 Supabase 執行 photo-delivery-v2.sql');
+        }
+        throw new Error(updateError.message);
+      }
 
       return NextResponse.json({ ok: true, note });
     }

@@ -12,6 +12,7 @@ import {
   stripDeliverySecrets,
 } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { isMissingColumnError } from '@/lib/supabase/errors';
 
 type RouteContext = { params: Promise<{ bookingId: string }> };
 
@@ -47,12 +48,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
     let photos: unknown[] = [];
     let finalCount = 0;
     if (delivery) {
-      const { data: photoRows, error: photoError } = await supabase
+      let photoRows;
+      let photoError;
+      ({ data: photoRows, error: photoError } = await supabase
         .from('delivery_photos')
         .select('id, kind, file_name, selection, selection_note, sort_order, created_at')
         .eq('delivery_id', delivery.id)
         .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true }));
+      if (photoError && isMissingColumnError(photoError.message, 'selection_note')) {
+        ({ data: photoRows, error: photoError } = await supabase
+          .from('delivery_photos')
+          .select('id, kind, file_name, selection, sort_order, created_at')
+          .eq('delivery_id', delivery.id)
+          .order('sort_order', { ascending: true })
+          .order('created_at', { ascending: true }));
+      }
       if (photoError) throw new Error(photoError.message);
       photos = await Promise.all(
         (photoRows ?? []).map(async (photo) => {

@@ -22,14 +22,13 @@ type BookingInfo = {
 type DeliveryInfo = {
   id: string;
   url_slug: string;
-  download_slug: string | null;
   password_changed: boolean;
   phase: string;
   selection_locked_at: string | null;
   selection_reopened: boolean;
   finals_started_at: string | null;
   final_expires_at: string | null;
-  completed_at: string | null;
+  completed_at?: string | null;
 };
 
 type PhotoRow = {

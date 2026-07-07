@@ -3,6 +3,7 @@ import { getAdminSession } from '@/lib/admin/get-session';
 import { isManagerRole } from '@/lib/admin/session';
 import { loadDeliveryByBookingId } from '@/lib/delivery/store';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { isMissingColumnError } from '@/lib/supabase/errors';
 
 type RouteContext = { params: Promise<{ bookingId: string }> };
 
@@ -31,7 +32,12 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       .from('photo_deliveries')
       .update({ completed_at: new Date().toISOString() })
       .eq('id', delivery.id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (isMissingColumnError(error.message, 'completed_at')) {
+        throw new Error('請至 Supabase 執行 supabase/photo-delivery-v2.sql 以啟用交片完成功能');
+      }
+      throw new Error(error.message);
+    }
 
     return NextResponse.json({
       ok: true,

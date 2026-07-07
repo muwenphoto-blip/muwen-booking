@@ -5,9 +5,10 @@ import {
   type DeliveryGuestSession,
 } from '@/lib/delivery/session';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
-import type { DeliveryLinkMode, DeliveryRecord } from '@/lib/delivery/types';
+import type { DeliveryRecord } from '@/lib/delivery/types';
 import { isDeliveryExpired, isSelectionOpen, resolveDeliveryPhase } from '@/lib/delivery/access';
 import { appendNoteToFilename } from '@/lib/delivery/selection-export';
+import { isMissingColumnError } from '@/lib/supabase/errors';
 
 export async function getDeliveryGuestSession(): Promise<DeliveryGuestSession | null> {
   const cookieStore = await cookies();
@@ -18,45 +19,13 @@ export async function getDeliveryGuestSession(): Promise<DeliveryGuestSession | 
 
 export async function loadDeliveryBySlug(slug: string): Promise<DeliveryRecord | null> {
   const supabase = createAdminSupabaseClient();
-  const { data: bySelection, error: selectionError } = await supabase
+  const { data, error } = await supabase
     .from('photo_deliveries')
     .select('*')
     .eq('url_slug', slug)
     .maybeSingle();
-  if (selectionError) throw new Error(selectionError.message);
-  if (bySelection) return bySelection as DeliveryRecord;
-
-  const { data: byDownload, error: downloadError } = await supabase
-    .from('photo_deliveries')
-    .select('*')
-    .eq('download_slug', slug)
-    .maybeSingle();
-  if (downloadError) throw new Error(downloadError.message);
-  return (byDownload as DeliveryRecord | null) ?? null;
-}
-
-export function getDeliveryLinkMode(
-  delivery: Pick<DeliveryRecord, 'url_slug' | 'download_slug'>,
-  slug: string,
-): DeliveryLinkMode | null {
-  if (delivery.url_slug === slug) return 'selection';
-  if (delivery.download_slug === slug) return 'download';
-  return null;
-}
-
-export async function ensureDeliveryDownloadSlug(delivery: DeliveryRecord): Promise<DeliveryRecord> {
-  if (delivery.download_slug) return delivery;
-  const supabase = createAdminSupabaseClient();
-  const { generateDeliverySlug } = await import('@/lib/delivery/slug');
-  const downloadSlug = generateDeliverySlug();
-  const { data, error } = await supabase
-    .from('photo_deliveries')
-    .update({ download_slug: downloadSlug })
-    .eq('id', delivery.id)
-    .select('*')
-    .single();
   if (error) throw new Error(error.message);
-  return data as DeliveryRecord;
+  return (data as DeliveryRecord | null) ?? null;
 }
 
 export async function loadDeliveryByBookingId(bookingId: string): Promise<DeliveryRecord | null> {
@@ -100,14 +69,6 @@ export function buildDeliveryPublicPath(slug: string): string {
   return `/delivery/${slug}`;
 }
 
-export function buildDeliverySelectionUrl(slug: string, requestUrl?: string): string {
-  return buildDeliveryAbsoluteUrl(slug, requestUrl);
-}
-
-export function buildDeliveryDownloadUrl(downloadSlug: string, requestUrl?: string): string {
-  return buildDeliveryAbsoluteUrl(downloadSlug, requestUrl);
-}
-
 export async function loadPreviewNoteMap(deliveryId: string): Promise<Map<string, string>> {
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase
@@ -115,7 +76,10 @@ export async function loadPreviewNoteMap(deliveryId: string): Promise<Map<string
     .select('file_name, selection_note')
     .eq('delivery_id', deliveryId)
     .eq('kind', 'preview');
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingColumnError(error.message, 'selection_note')) return new Map();
+    throw new Error(error.message);
+  }
 
   const map = new Map<string, string>();
   for (const row of data ?? []) {
@@ -221,18 +185,28 @@ export type DeliveryListMeta = {
   canSelect: boolean;
 };
 
+const DELIVERY_LIST_META_BASE =
+  'booking_id, url_slug, selection_locked_at, selection_reopened, phase, finals_started_at, final_expires_at';
+
 export async function loadDeliveryListMetaByBookingIds(
   bookingIds: string[],
 ): Promise<Map<string, DeliveryListMeta>> {
   if (!bookingIds.length) return new Map();
 
   const supabase = createAdminSupabaseClient();
-  const { data: deliveries, error } = await supabase
+  let deliveries;
+  let error;
+  ({ data: deliveries, error } = await supabase
     .from('photo_deliveries')
-    .select(
-      'booking_id, url_slug, download_slug, selection_locked_at, selection_reopened, phase, finals_started_at, final_expires_at, completed_at',
-    )
-    .in('booking_id', bookingIds);
+    .select(`${DELIVERY_LIST_META_BASE}, completed_at`)
+    .in('booking_id', bookingIds));
+
+  if (error && isMissingColumnError(error.message, 'completed_at')) {
+    ({ data: deliveries, error } = await supabase
+      .from('photo_deliveries')
+      .select(DELIVERY_LIST_META_BASE)
+      .in('booking_id', bookingIds));
+  }
   if (error) throw new Error(error.message);
 
   const result = new Map<string, DeliveryListMeta>();
@@ -240,7 +214,6 @@ export async function loadDeliveryListMetaByBookingIds(
     const delivery = row as Pick<
       DeliveryRecord,
       | 'url_slug'
-      | 'download_slug'
       | 'selection_locked_at'
       | 'selection_reopened'
       | 'phase'

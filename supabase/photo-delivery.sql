@@ -13,7 +13,6 @@ create table if not exists public.photo_deliveries (
   selection_reopened boolean not null default false,
   finals_started_at timestamptz,
   final_expires_at timestamptz,
-  download_slug text unique,
   completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

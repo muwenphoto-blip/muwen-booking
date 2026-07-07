@@ -9,6 +9,7 @@ import {
 import { getDeliveryGuestSession, loadDeliveryBySlug, syncDeliveryExpiry } from '@/lib/delivery/store';
 import { signPhotoAccessToken } from '@/lib/delivery/photo-access-token';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
+import { isMissingColumnError } from '@/lib/supabase/errors';
 
 type RouteContext = { params: Promise<{ slug: string }> };
 type GuestPhotoMode = 'selection' | 'delivery';
@@ -59,15 +60,22 @@ export async function GET(request: NextRequest, context: RouteContext) {
       });
     }
 
-    let query = supabase
+    let photos;
+    let error;
+    ({ data: photos, error } = await supabase
       .from('delivery_photos')
       .select('id, kind, file_name, selection, selection_note, sort_order, storage_path')
       .eq('delivery_id', delivery.id)
-      .order('sort_order', { ascending: true });
-
-    query = query.eq('kind', mode === 'delivery' ? 'final' : 'preview');
-
-    const { data: photos, error } = await query;
+      .eq('kind', mode === 'delivery' ? 'final' : 'preview')
+      .order('sort_order', { ascending: true }));
+    if (error && isMissingColumnError(error.message, 'selection_note')) {
+      ({ data: photos, error } = await supabase
+        .from('delivery_photos')
+        .select('id, kind, file_name, selection, sort_order, storage_path')
+        .eq('delivery_id', delivery.id)
+        .eq('kind', mode === 'delivery' ? 'final' : 'preview')
+        .order('sort_order', { ascending: true }));
+    }
     if (error) throw new Error(error.message);
 
     const items = await Promise.all(
@@ -88,7 +96,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
           kind: photo.kind,
           file_name: photo.file_name,
           selection: photo.selection,
-          selection_note: photo.selection_note || '',
+          selection_note: 'selection_note' in photo ? String(photo.selection_note || '') : '',
           url,
         };
       }),
