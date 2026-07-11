@@ -8,6 +8,7 @@ import type {
 } from '@/lib/admin/finance';
 import {
   getFinancePeriodRange,
+  financeLedgerHasIncome,
   loadFinanceSummary,
   loadFinanceTransactions,
 } from '@/lib/admin/finance';
@@ -68,16 +69,20 @@ export function buildFinanceAccountingReport(
   const expenseCategories = categoryBreakdown.filter((row) => row.type === 'expense');
   const refundCategories = categoryBreakdown.filter((row) => row.type === 'refund');
 
-  const grossRevenue = summary.income + summary.discountCost;
+  const ledgerActive = financeLedgerHasIncome(summary.income);
+  const discountCost = ledgerActive ? summary.discountCost : 0;
+  const effectiveDepreciation = ledgerActive ? equipmentDepreciation : 0;
+
+  const grossRevenue = summary.income + discountCost;
   const netRevenue = summary.income;
   const operatingProfit = summary.netProfit;
-  const netProfit = operatingProfit - equipmentDepreciation;
+  const netProfit = operatingProfit - effectiveDepreciation;
   const netProfitMargin =
     netRevenue > 0 ? Math.round((netProfit / netRevenue) * 1000) / 10 : 0;
   const discountRate =
-    grossRevenue > 0 ? Math.round((summary.discountCost / grossRevenue) * 1000) / 10 : 0;
+    grossRevenue > 0 ? Math.round((discountCost / grossRevenue) * 1000) / 10 : 0;
   const monthKey = monthKeyFromIsoDate(summary.from);
-  const cashFlowMetrics = resolveCashFlow(operatingProfit, equipmentDepreciation);
+  const cashFlowMetrics = resolveCashFlow(operatingProfit, effectiveDepreciation);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -87,7 +92,7 @@ export function buildFinanceAccountingReport(
     to: summary.to,
     accounting: {
       grossRevenue,
-      discountCost: summary.discountCost,
+      discountCost,
       netRevenue,
       totalExpense: summary.expense,
       totalRefund: summary.refund,
@@ -96,7 +101,7 @@ export function buildFinanceAccountingReport(
       netProfitMargin,
       discountRate,
       transactionCount: summary.transactionCount,
-      equipmentDepreciation,
+      equipmentDepreciation: effectiveDepreciation,
       cashFlow: cashFlowMetrics.cashFlow,
       cashFlowDirection: cashFlowMetrics.direction,
       cashFlowLabel: cashFlowMetrics.label,

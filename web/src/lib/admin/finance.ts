@@ -245,6 +245,11 @@ function sumByType(rows: FinanceTransactionRow[]) {
   return { income, expense, refund, netProfit: income - expense - refund };
 }
 
+/** 收支帳本在尚無入帳收入前，不計入文件折扣與器材損耗 */
+export function financeLedgerHasIncome(income: number): boolean {
+  return income > 0;
+}
+
 function buildBuckets(
   period: FinancePeriod,
   from: string,
@@ -393,10 +398,13 @@ export async function loadFinanceSummary(
   ]);
 
   const totals = sumByType(transactions);
+  const ledgerActive = financeLedgerHasIncome(totals.income);
   let discountCost = 0;
-  discountByDate.forEach((value) => {
-    discountCost += value;
-  });
+  if (ledgerActive) {
+    discountByDate.forEach((value) => {
+      discountCost += value;
+    });
+  }
 
   return {
     period,
@@ -406,7 +414,13 @@ export async function loadFinanceSummary(
     ...totals,
     discountCost,
     transactionCount: transactions.length,
-    buckets: buildBuckets(period, range.from, range.to, transactions, discountByDate),
+    buckets: buildBuckets(
+      period,
+      range.from,
+      range.to,
+      transactions,
+      ledgerActive ? discountByDate : new Map(),
+    ),
   };
 }
 

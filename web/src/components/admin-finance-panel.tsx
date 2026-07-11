@@ -580,15 +580,15 @@ export function AdminFinancePanel() {
 
         {summary &&
         accountingReport?.performance &&
-        summary.income <= 0 &&
-        accountingReport.performance.company.totalRevenue > 0 ? (
+        summary.income > 0 &&
+        accountingReport.performance.company.totalRevenue > summary.income ? (
           <p className="admin-error">
-            預約單應收合計 {formatCurrency(accountingReport.performance.company.totalRevenue)}，但收支帳本尚無收入紀錄。
-            請點上方「同步收款」，或至各預約單文件按儲存（需有付款金額）。
+            預約單應收合計 {formatCurrency(accountingReport.performance.company.totalRevenue)}，高於已入帳收入 {formatCurrency(summary.income)}。
+            請至各預約單文件確認付款紀錄後按儲存，或點上方「同步收款」。
           </p>
         ) : null}
 
-        {accountingReport ? (
+        {accountingReport && accountingReport.accounting.netRevenue > 0 ? (
           <div
             className={[
               'admin-finance-cashflow-badge',
