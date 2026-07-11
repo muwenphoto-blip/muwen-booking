@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { canRemoveBooking } from '@/lib/admin/bookings';
+import { purgeBookingFinanceOnDelete } from '@/lib/admin/finance';
 import { assertManagerRole } from '@/lib/admin/permissions';
 import { getAdminSession } from '@/lib/admin/get-session';
 import { createAdminSupabaseClient } from '@/lib/supabase/admin';
@@ -19,7 +20,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
 
     const { data: booking, error: fetchError } = await supabase
       .from('bookings')
-      .select('id, customer_name, booking_date, booking_time, status')
+      .select('id, case_number, customer_name, booking_date, booking_time, status')
       .eq('id', id)
       .maybeSingle();
     if (fetchError) throw new Error(fetchError.message);
@@ -28,10 +29,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       throw new Error('僅「已取消」或「已拒絕」可移除（主控可移除任何狀態）');
     }
 
-    const { error: txDeleteError } = await supabase.from('transactions').delete().eq('booking_id', id);
-    if (txDeleteError && !txDeleteError.message.includes('does not exist')) {
-      throw new Error(txDeleteError.message);
-    }
+    await purgeBookingFinanceOnDelete(booking.id, booking.case_number || '');
 
     const { error: removeError } = await supabase.from('bookings').delete().eq('id', id);
     if (removeError) throw new Error(removeError.message);

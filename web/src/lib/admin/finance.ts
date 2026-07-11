@@ -552,6 +552,62 @@ export async function deleteFinanceTransaction(
   return { message: '收支紀錄已刪除' };
 }
 
+export async function purgeBookingFinanceOnDelete(
+  bookingId: string,
+  caseNumber = '',
+): Promise<void> {
+  const supabase = createAdminSupabaseClient();
+  const safeCaseNumber = String(caseNumber || '').trim();
+
+  const { error: byBookingError } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('booking_id', bookingId);
+  if (byBookingError && !byBookingError.message.includes('does not exist')) {
+    throw new Error(byBookingError.message);
+  }
+
+  if (!safeCaseNumber) return;
+
+  const { error: orphanError } = await supabase
+    .from('transactions')
+    .delete()
+    .is('booking_id', null)
+    .eq('case_number', safeCaseNumber);
+  if (orphanError && !orphanError.message.includes('does not exist')) {
+    throw new Error(orphanError.message);
+  }
+}
+
+export async function purgeStaleBookingFinanceRows(
+  bookingId: string,
+  caseNumber = '',
+): Promise<void> {
+  const supabase = createAdminSupabaseClient();
+  const safeCaseNumber = String(caseNumber || '').trim();
+
+  const { error: byBookingError } = await supabase
+    .from('transactions')
+    .delete()
+    .eq('booking_id', bookingId)
+    .eq('source', 'document_payment');
+  if (byBookingError && !byBookingError.message.includes('does not exist')) {
+    throw new Error(byBookingError.message);
+  }
+
+  if (!safeCaseNumber) return;
+
+  const { error: orphanError } = await supabase
+    .from('transactions')
+    .delete()
+    .is('booking_id', null)
+    .eq('case_number', safeCaseNumber)
+    .eq('source', 'document_payment');
+  if (orphanError && !orphanError.message.includes('does not exist')) {
+    throw new Error(orphanError.message);
+  }
+}
+
 export async function syncTransactionsFromDocument(
   bookingId: string,
   caseNumber: string,
@@ -647,16 +703,17 @@ export async function syncTransactionsFromDocument(
     });
   }
 
-  const { error: deleteError } = await supabase
-    .from('transactions')
-    .delete()
-    .eq('booking_id', bookingId)
-    .eq('source', 'document_payment');
-  if (deleteError) {
-    if (deleteError.message.includes('does not exist') && deleteError.message.includes('transactions')) {
+  try {
+    await purgeStaleBookingFinanceRows(
+      bookingId,
+      caseNumber || prepared.caseNumber || '',
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : '無法清除舊收支紀錄';
+    if (message.includes('does not exist') && message.includes('transactions')) {
       return { synced: 0, errors: ['請至 Supabase 執行 supabase/transactions.sql'] };
     }
-    return { synced: 0, errors: [deleteError.message] };
+    return { synced: 0, errors: [message] };
   }
 
   if (!rowsToInsert.length) {
