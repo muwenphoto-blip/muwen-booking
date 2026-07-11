@@ -24,8 +24,13 @@ export async function DELETE(_request: Request, context: RouteContext) {
       .maybeSingle();
     if (fetchError) throw new Error(fetchError.message);
     if (!booking) throw new Error('找不到這筆預約');
-    if (!canRemoveBooking(booking.status)) {
-      throw new Error('僅「已取消」或「已拒絕」可移除');
+    if (!canRemoveBooking(booking.status, session.role)) {
+      throw new Error('僅「已取消」或「已拒絕」可移除（主控可移除任何狀態）');
+    }
+
+    const { error: txDeleteError } = await supabase.from('transactions').delete().eq('booking_id', id);
+    if (txDeleteError && !txDeleteError.message.includes('does not exist')) {
+      throw new Error(txDeleteError.message);
     }
 
     const { error: removeError } = await supabase.from('bookings').delete().eq('id', id);

@@ -1,4 +1,4 @@
-import type { AdminSession } from '@/lib/admin/session';
+import type { AdminRole, AdminSession } from '@/lib/admin/session';
 import { isManagerRole } from '@/lib/admin/session';
 
 export const BOOKING_STATUS_PENDING = '待確認';
@@ -43,7 +43,8 @@ export function canCancelBooking(status: string): boolean {
   return status !== BOOKING_STATUS_PENDING;
 }
 
-export function canRemoveBooking(status: string): boolean {
+export function canRemoveBooking(status: string, role?: AdminRole): boolean {
+  if (role === '主') return true;
   return status === BOOKING_STATUS_CANCELLED || status === BOOKING_STATUS_REJECTED;
 }
 

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { isMissingColumnError } from '@/lib/supabase/errors';
 
 const BOOKING_DOCUMENT_BASE_SELECT =
-  'id, case_number, booking_date, booking_time, staff_name, service, customer_name, phone, phone_country, email, note, status';
+  'id, case_number, booking_date, booking_time, staff_name, service, headcount, customer_name, phone, phone_country, email, note, status';
 
 export type BookingDocumentRow = {
   id: string;
@@ -11,6 +11,7 @@ export type BookingDocumentRow = {
   booking_time: string | null;
   staff_name: string | null;
   service: string | null;
+  headcount: string | null;
   customer_name: string | null;
   phone: string | null;
   phone_country: string | null;

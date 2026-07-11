@@ -1,5 +1,6 @@
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
 import {
+  applyHeadcountToDocument,
   buildInitialDocumentState,
   emptyDateParts,
   migrateEmergencyContactFields,
@@ -23,6 +24,7 @@ type BookingRowForDocument = {
   staff_name?: string | null;
   booking_date?: string | null;
   booking_time?: string | null;
+  headcount?: string | null;
   document_data?: unknown;
 };
 
@@ -159,24 +161,27 @@ function mergeBookingIntoDocument(
   );
   const shootingTime = String(state.shootingTime || booking.booking_time || '').trim();
 
-  return {
-    ...state,
-    caseNumber: booking.case_number || state.caseNumber || '',
-    customerName: preferStoredText(state.customerName, booking.customer_name || ''),
-    phone: preferStoredText(state.phone, formatBookingPhone(booking)),
-    email: preferStoredText(state.email, booking.email || ''),
-    notes: preferStoredText(state.notes, cleanBookingNote(booking.note)),
-    address: preferStoredText(state.address, ''),
-    lineId: preferStoredText(state.lineId, ''),
-    service: state.service || parsed.service,
-    serviceOption: state.serviceOption || parsed.option,
-    photographer: preferStoredText(state.photographer, staffName),
-    handler: preferStoredText(state.handler, handlerName || staffName),
-    appointmentDate: { ...appointmentDate },
-    shootingDate: { ...appointmentDate },
-    shootingTime,
-    appointmentContent,
-  };
+  return applyHeadcountToDocument(
+    {
+      ...state,
+      caseNumber: booking.case_number || state.caseNumber || '',
+      customerName: preferStoredText(state.customerName, booking.customer_name || ''),
+      phone: preferStoredText(state.phone, formatBookingPhone(booking)),
+      email: preferStoredText(state.email, booking.email || ''),
+      notes: preferStoredText(state.notes, cleanBookingNote(booking.note)),
+      address: preferStoredText(state.address, ''),
+      lineId: preferStoredText(state.lineId, ''),
+      service: state.service || parsed.service,
+      serviceOption: state.serviceOption || parsed.option,
+      photographer: preferStoredText(state.photographer, staffName),
+      handler: preferStoredText(state.handler, handlerName || staffName),
+      appointmentDate: { ...appointmentDate },
+      shootingDate: { ...appointmentDate },
+      shootingTime,
+      appointmentContent,
+    },
+    booking.headcount,
+  );
 }
 
 export function loadBookingDocumentState(
@@ -198,6 +203,7 @@ export function loadBookingDocumentState(
     service: booking.service || '',
     staffName: booking.staff_name || '',
     bookingDate: booking.booking_date || '',
+    headcount: booking.headcount,
     services,
     handlerName,
   });

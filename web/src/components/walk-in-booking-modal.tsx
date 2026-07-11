@@ -5,7 +5,7 @@ import type { BookingConfig, BookingSlot } from '@/lib/booking/types';
 import type { AdminPromotionRow } from '@/lib/admin/promotions';
 import type { AssetOption } from '@/lib/admin/assets';
 import type { BookingDocumentState } from '@/lib/admin/booking-documents';
-import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE, syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
+import { SHOP_ADDRESS, SHOP_FULL_NAME, SHOP_PHONE, applyHeadcountToDocument, syncDocumentCatalogPricing } from '@/lib/admin/booking-documents';
 import type { ServiceItem } from '@/lib/booking/types';
 import {
   applyBookingSlotToDocument,
@@ -179,13 +179,16 @@ export function WalkInBookingModal({
     setDocState((prev) =>
       prev && config
         ? syncWalkInDocument(
-            applyBookingSlotToDocument(prev, { date, time: selectedTime, staff }),
+            applyHeadcountToDocument(
+              applyBookingSlotToDocument(prev, { date, time: selectedTime, staff }),
+              headcount,
+            ),
             config.services,
             promotions,
           )
         : prev,
     );
-  }, [config, date, staff, selectedTime, promotions]);
+  }, [config, date, staff, selectedTime, headcount, promotions]);
 
   const isShopClosed = useMemo(() => {
     if (!config || !date) return false;

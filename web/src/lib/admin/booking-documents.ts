@@ -258,6 +258,28 @@ function emptyPayments(): DocumentPaymentRow[] {
   }));
 }
 
+export function resolveDocumentQuantityFromHeadcount(headcount?: string | null): string {
+  const qty = String(headcount ?? '').trim();
+  if (qty && /^\d+$/.test(qty) && Number(qty) > 0) return qty;
+  return '1';
+}
+
+export function applyHeadcountToDocument(
+  state: BookingDocumentState,
+  headcount: string | null | undefined,
+): BookingDocumentState {
+  const qty = resolveDocumentQuantityFromHeadcount(headcount);
+  const itemRows = [...state.itemRows];
+  const lineItems = [...state.lineItems];
+  if (itemRows[0]) {
+    itemRows[0] = { ...itemRows[0], quantity: qty };
+  }
+  if (lineItems[0]) {
+    lineItems[0] = { ...lineItems[0], quantity: qty };
+  }
+  return { ...state, itemRows, lineItems };
+}
+
 export function buildInitialDocumentState(input: {
   caseNumber: string;
   customerName: string;
@@ -267,6 +289,7 @@ export function buildInitialDocumentState(input: {
   service: string;
   staffName: string;
   bookingDate: string;
+  headcount?: string | null;
   services: ServiceItem[];
   handlerName?: string;
 }): BookingDocumentState {
@@ -274,11 +297,12 @@ export function buildInitialDocumentState(input: {
   const appointmentDate = parseDateParts(input.bookingDate);
   const lineItems = emptyLineItems();
   const itemRows = emptyItemRows();
+  const quantity = resolveDocumentQuantityFromHeadcount(input.headcount);
 
   if (service) {
     lineItems[0] = {
       serviceContent: option ? `${service}｜${option}` : service,
-      quantity: '1',
+      quantity,
       unitPrice: '',
       amount: '',
       remarks: '',
@@ -289,7 +313,7 @@ export function buildInitialDocumentState(input: {
       price: '',
       discount: '',
       itemTotal: '',
-      quantity: '1',
+      quantity,
       ...EMPTY_ITEM_DISCOUNT_RULE,
     };
   }
@@ -479,7 +503,7 @@ export function syncServiceChange(
       packageChoice: serviceOption,
       price: '',
       discount: '',
-      quantity: '',
+      quantity: itemRows[0].quantity || '',
       itemTotal: '',
       ...EMPTY_ITEM_DISCOUNT_RULE,
     };

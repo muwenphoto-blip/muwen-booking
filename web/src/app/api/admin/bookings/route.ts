@@ -22,6 +22,7 @@ import {
   serializeBookingDocumentState,
 } from '@/lib/admin/booking-document-store';
 import { DOCUMENT_DATA_SETUP_HINT } from '@/lib/admin/booking-document-query';
+import { applyHeadcountToDocument } from '@/lib/admin/booking-documents';
 import { applyDocumentFinancialSync } from '@/components/booking-document-shared';
 import { syncTransactionsFromDocument } from '@/lib/admin/finance';
 import { getAdminSession } from '@/lib/admin/get-session';
@@ -114,7 +115,7 @@ export async function GET() {
         canSelectPhotos: Boolean(delivery?.canSelect),
         selectionUrl: delivery?.slug ? `/delivery/${delivery.slug}` : null,
         canCancel: canManageBookings && canCancelBooking(row.status),
-        canRemove: canManageBookings && canRemoveBooking(row.status),
+        canRemove: canManageBookings && canRemoveBooking(row.status, session.role),
       };
     });
 
@@ -152,14 +153,17 @@ export async function POST(request: NextRequest) {
     const payload = validateWalkInCreatePayload(body, config);
     const phoneDisplay = `${payload.phoneCountry}${payload.phone}`;
     const document = applyDocumentFinancialSync(
-      applyBookingSlotToDocument(
-        {
-          ...payload.document,
-          customerName: payload.document.customerName || payload.name,
-          email: payload.document.email || payload.email || '',
-          phone: payload.document.phone || phoneDisplay,
-        },
-        { date: payload.date, time: payload.time, staff: payload.staff },
+      applyHeadcountToDocument(
+        applyBookingSlotToDocument(
+          {
+            ...payload.document,
+            customerName: payload.document.customerName || payload.name,
+            email: payload.document.email || payload.email || '',
+            phone: payload.document.phone || phoneDisplay,
+          },
+          { date: payload.date, time: payload.time, staff: payload.staff },
+        ),
+        payload.headcount,
       ),
     );
 
