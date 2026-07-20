@@ -1,5 +1,6 @@
 -- 案號流水：刪除預約後也不重用（請在 Supabase SQL Editor 執行一次）
 -- 每位攝影師前綴（AA、XE…）各自累加，只增不減
+-- 修復：函式變數不可與欄位同名 prefix，否則會報 column reference "prefix" is ambiguous
 
 create table if not exists public.staff_case_sequences (
   prefix text primary key,
@@ -33,8 +34,8 @@ security definer
 set search_path = public
 as $$
 declare
-  prefix text;
-  next_num int;
+  v_prefix text;
+  v_next_num int;
 begin
   perform pg_advisory_xact_lock(9847321);
 
@@ -43,28 +44,28 @@ begin
   end if;
 
   select public.normalize_case_prefix(case_prefix)
-  into prefix
+  into v_prefix
   from public.staff
   where name = p_staff_name;
 
-  if prefix is null or length(prefix) <> 2 then
+  if v_prefix is null or length(v_prefix) <> 2 then
     raise exception '攝影師「%」尚未設定案號前綴，請至團隊管理設定', p_staff_name;
   end if;
 
   insert into public.staff_case_sequences (prefix, last_num)
-  values (prefix, 0)
+  values (v_prefix, 0)
   on conflict (prefix) do nothing;
 
   update public.staff_case_sequences
-  set last_num = last_num + 1
-  where staff_case_sequences.prefix = prefix
-  returning last_num into next_num;
+  set last_num = staff_case_sequences.last_num + 1
+  where staff_case_sequences.prefix = v_prefix
+  returning staff_case_sequences.last_num into v_next_num;
 
-  if next_num > 99999 then
-    raise exception '攝影師「%」案號已滿（%99999）', p_staff_name, prefix;
+  if v_next_num > 99999 then
+    raise exception '攝影師「%」案號已滿（%99999）', p_staff_name, v_prefix;
   end if;
 
-  return prefix || lpad(next_num::text, 5, '0');
+  return v_prefix || lpad(v_next_num::text, 5, '0');
 end;
 $$;
 
